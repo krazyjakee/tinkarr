@@ -1,0 +1,329 @@
+import { HttpClientService } from './http-client.service';
+import { FlaresolverrService } from './flaresolverr.service';
+import { ParserService, ParsedResult } from './parser.service';
+import { SettingsService } from './settings.service';
+
+export interface IndexerConfig {
+  id: number;
+  title: string;
+  url: string;
+  requiresFlaresolverr: boolean;
+  searchType: string | null;
+  searchUrl: string | null;
+  searchMethod: string | null;
+  searchParams: any;
+  searchQueryParam: string | null;
+  resultSelector: string | null;
+  resultMapping: any;
+}
+
+export interface ScraperOptions {
+  timeout?: number;
+  useFlaresolverr?: boolean;
+  forceFlaresolverr?: boolean;
+}
+
+export interface ScraperResult {
+  success: boolean;
+  data: ParsedResult[];
+  html?: string;
+  error?: string;
+  usedFlaresolverr: boolean;
+  url: string;
+  statusCode: number;
+}
+
+export class ScraperService {
+  private httpClient: HttpClientService;
+  private flaresolverrService: FlaresolverrService;
+  private parserService: ParserService;
+
+  constructor(settingsService: SettingsService) {
+    this.httpClient = new HttpClientService();
+    this.flaresolverrService = new FlaresolverrService(settingsService);
+    this.parserService = new ParserService();
+  }
+
+  /**
+   * Scrape a website using indexer configuration
+   */
+  public async scrape(
+    indexer: IndexerConfig,
+    query?: string,
+    options: ScraperOptions = {}
+  ): Promise<ScraperResult> {
+    // Build the search URL
+    const searchUrl = this.buildSearchUrl(indexer, query);
+
+    if (!searchUrl) {
+      return {
+        success: false,
+        data: [],
+        error: 'No search URL configured for this indexer',
+        usedFlaresolverr: false,
+        url: indexer.url,
+        statusCode: 0,
+      };
+    }
+
+    // Determine if we should use Flaresolverr
+    const shouldUseFlaresolverr =
+      options.forceFlaresolverr ||
+      indexer.requiresFlaresolverr ||
+      (options.useFlaresolverr && await this.flaresolverrService.isEnabled());
+
+    let html: string;
+    let statusCode: number;
+    let usedFlaresolverr = false;
+    let actualUrl = searchUrl;
+
+    try {
+      if (shouldUseFlaresolverr && await this.flaresolverrService.isEnabled()) {
+        // Try with Flaresolverr first
+        try {
+          const result = await this.fetchWithFlaresolverr(searchUrl, indexer.searchMethod || 'GET');
+          html = result.html;
+          statusCode = result.statusCode;
+          actualUrl = result.url;
+          usedFlaresolverr = true;
+        } catch (flaresolverrError: any) {
+          console.warn(`Flaresolverr failed, falling back to direct request: ${flaresolverrError.message}`);
+
+          // Fallback to direct request
+          const result = await this.fetchDirect(searchUrl, indexer.searchMethod || 'GET', options.timeout);
+          html = result.html;
+          statusCode = result.statusCode;
+          actualUrl = result.url;
+          usedFlaresolverr = false;
+        }
+      } else {
+        // Try direct request first
+        try {
+          const result = await this.fetchDirect(searchUrl, indexer.searchMethod || 'GET', options.timeout);
+          html = result.html;
+          statusCode = result.statusCode;
+          actualUrl = result.url;
+          usedFlaresolverr = false;
+        } catch (directError: any) {
+          // If direct request fails and Flaresolverr is available, try it
+          if (await this.flaresolverrService.isEnabled()) {
+            console.warn(`Direct request failed, trying Flaresolverr: ${directError.message}`);
+            const result = await this.fetchWithFlaresolverr(searchUrl, indexer.searchMethod || 'GET');
+            html = result.html;
+            statusCode = result.statusCode;
+            actualUrl = result.url;
+            usedFlaresolverr = true;
+          } else {
+            throw directError;
+          }
+        }
+      }
+
+      // Parse the results
+      const parsedResults = this.parseResults(html, indexer, actualUrl);
+
+      return {
+        success: true,
+        data: parsedResults,
+        html,
+        usedFlaresolverr,
+        url: actualUrl,
+        statusCode,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        data: [],
+        error: error.message,
+        usedFlaresolverr,
+        url: actualUrl,
+        statusCode: 0,
+      };
+    }
+  }
+
+  /**
+   * Fetch page using direct HTTP request
+   */
+  private async fetchDirect(
+    url: string,
+    method: string,
+    timeout?: number
+  ): Promise<{ html: string; statusCode: number; url: string }> {
+    const httpClient = new HttpClientService({ timeout });
+
+    let response;
+    if (method === 'POST') {
+      response = await httpClient.post(url);
+    } else {
+      response = await httpClient.get(url);
+    }
+
+    if (response.status >= 400) {
+      throw new Error(`HTTP ${response.status}: Failed to fetch ${url}`);
+    }
+
+    return {
+      html: response.data,
+      statusCode: response.status,
+      url: response.url,
+    };
+  }
+
+  /**
+   * Fetch page using Flaresolverr
+   */
+  private async fetchWithFlaresolverr(
+    url: string,
+    method: string
+  ): Promise<{ html: string; statusCode: number; url: string }> {
+    const result = await this.flaresolverrService.solve(url, {
+      method: method === 'POST' ? 'POST' : 'GET',
+    });
+
+    return {
+      html: result.html,
+      statusCode: result.status,
+      url: result.url,
+    };
+  }
+
+  /**
+   * Build search URL from indexer config and query
+   */
+  private buildSearchUrl(indexer: IndexerConfig, query?: string): string | null {
+    if (!indexer.searchUrl) {
+      return null;
+    }
+
+    let url = indexer.searchUrl;
+
+    // Parse existing query parameters
+    const urlObj = new URL(url);
+
+    // Add search query parameter if provided
+    if (query && indexer.searchQueryParam) {
+      urlObj.searchParams.set(indexer.searchQueryParam, query);
+    }
+
+    // Add additional search parameters from config
+    if (indexer.searchParams && typeof indexer.searchParams === 'object') {
+      const params = typeof indexer.searchParams === 'string'
+        ? JSON.parse(indexer.searchParams)
+        : indexer.searchParams;
+
+      for (const [key, value] of Object.entries(params)) {
+        if (typeof value === 'string' || typeof value === 'number') {
+          urlObj.searchParams.set(key, String(value));
+        }
+      }
+    }
+
+    return urlObj.toString();
+  }
+
+  /**
+   * Parse HTML results using indexer configuration
+   */
+  private parseResults(html: string, indexer: IndexerConfig, baseUrl: string): ParsedResult[] {
+    if (!indexer.resultSelector || !indexer.resultMapping) {
+      return [];
+    }
+
+    try {
+      // Parse result mapping if it's a string
+      const resultMapping = typeof indexer.resultMapping === 'string'
+        ? JSON.parse(indexer.resultMapping)
+        : indexer.resultMapping;
+
+      // Extract data using parser service
+      const results = this.parserService.extractData(
+        html,
+        indexer.resultSelector,
+        resultMapping,
+        {
+          baseUrl,
+          normalizeWhitespace: true,
+          trim: true,
+        }
+      );
+
+      return results;
+    } catch (error: any) {
+      console.error(`Failed to parse results for indexer ${indexer.title}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Test an indexer configuration
+   */
+  public async testIndexer(
+    indexer: IndexerConfig,
+    query?: string,
+    options: ScraperOptions = {}
+  ): Promise<{
+    success: boolean;
+    message: string;
+    resultCount?: number;
+    sampleResults?: ParsedResult[];
+    html?: string;
+    usedFlaresolverr?: boolean;
+    statusCode?: number;
+  }> {
+    const result = await this.scrape(indexer, query || 'test', options);
+
+    if (!result.success) {
+      return {
+        success: false,
+        message: result.error || 'Unknown error',
+        usedFlaresolverr: result.usedFlaresolverr,
+        statusCode: result.statusCode,
+      };
+    }
+
+    return {
+      success: true,
+      message: `Successfully scraped ${result.data.length} results`,
+      resultCount: result.data.length,
+      sampleResults: result.data.slice(0, 5), // Return first 5 results as sample
+      html: result.html,
+      usedFlaresolverr: result.usedFlaresolverr,
+      statusCode: result.statusCode,
+    };
+  }
+
+  /**
+   * Auto-detect search forms and RSS feeds on a page
+   */
+  public async autoDetect(url: string): Promise<{
+    success: boolean;
+    forms?: Array<any>;
+    feeds?: Array<any>;
+    error?: string;
+  }> {
+    try {
+      // Fetch the page
+      const response = await this.httpClient.get(url);
+
+      if (response.status >= 400) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      // Extract forms and feeds
+      const forms = this.parserService.extractForms(response.data);
+      const feeds = this.parserService.extractFeedLinks(response.data, url);
+
+      return {
+        success: true,
+        forms,
+        feeds,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+}
