@@ -17,8 +17,18 @@ export function errorHandler(err: AppError, req: Request, res: Response, next: N
 }
 
 export function notFoundHandler(req: Request, res: Response) {
-  res.status(404).json({
-    error: 'Route not found',
-    path: req.path,
-  });
+  // This should only trigger for API routes in production
+  // SPA routes are handled by the catch-all before this
+  if (req.path.startsWith('/api')) {
+    res.status(404).json({
+      error: 'API endpoint not found',
+      path: req.path,
+    });
+  } else {
+    // Fallback in case something went wrong with SPA serving
+    res.status(404).json({
+      error: 'Route not found',
+      path: req.path,
+    });
+  }
 }

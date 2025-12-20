@@ -2,11 +2,14 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 // Import routes
 import authRoutes from './api/auth/auth.routes';
 import indexersRoutes from './api/admin/indexers.routes';
 import settingsRoutes from './api/admin/settings.routes';
+import systemRoutes from './api/admin/system.routes';
 import torznabRoutes from './api/torznab/torznab.routes';
 
 // Import middleware
@@ -17,6 +20,7 @@ dotenv.config();
 
 const app: Application = express();
 const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Middleware
 app.use(cors());
@@ -45,7 +49,47 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/indexers', indexersRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/system', systemRoutes);
 app.use('/api/torznab', torznabRoutes);
+
+// Frontend serving
+if (NODE_ENV === 'production') {
+  // Production: Serve static files
+  const frontendPath = path.join(__dirname, '..', 'public');
+
+  // Serve static files with caching
+  app.use(express.static(frontendPath, {
+    maxAge: '1y',
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, filePath) => {
+      // Set immutable cache for hashed assets
+      if (filePath.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
+
+  // SPA fallback - must be AFTER static files
+  app.get('*', (req, res) => {
+    // Don't serve SPA for API routes or health check (shouldn't reach here but safety check)
+    if (req.path.startsWith('/api') || req.path === '/health') {
+      return res.status(404).json({ error: 'API endpoint not found' });
+    }
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+} else {
+  // Development: Proxy to Vite dev server
+  const VITE_PORT = process.env.VITE_PORT || 5173;
+
+  // Proxy all non-API requests to Vite dev server
+  // API routes are already handled above, so they won't reach this middleware
+  app.use('/', createProxyMiddleware({
+    target: `http://localhost:${VITE_PORT}`,
+    changeOrigin: true,
+    ws: true, // Enable websocket proxy for HMR
+  }));
+}
 
 // Error handling
 app.use(notFoundHandler);
@@ -53,20 +97,22 @@ app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {
+  const mode = NODE_ENV === 'production' ? 'Production' : 'Development';
   console.log(`
 ╔═══════════════════════════════════════╗
 ║                                       ║
-║   🚀 Tinkarr Backend Server           ║
+║   🚀 Tinkarr Unified Service          ║
 ║                                       ║
-║   Server running on port ${PORT}        ║
-║   Environment: ${process.env.NODE_ENV || 'development'}         ║
+║   Running on: http://localhost:${PORT}     ║
+║   Environment: ${NODE_ENV.padEnd(11)}         ║
+║   Mode: ${mode.padEnd(19)} ║
 ║                                       ║
-║   API Documentation:                  ║
-║   - Health: GET /health               ║
-║   - Auth: POST /api/auth/login        ║
-║   - Indexers: /api/indexers           ║
-║   - Settings: /api/settings           ║
-║   - Torznab: /api/torznab/:id         ║
+║   Frontend: http://localhost:${PORT}      ║
+║   Health: GET /health                 ║
+║   API: /api/*                         ║
+║                                       ║${NODE_ENV === 'production' ? `
+║   Serving: Static build               ║` : `
+║   Serving: Vite dev server (HMR)      ║`}
 ║                                       ║
 ╚═══════════════════════════════════════╝
   `);

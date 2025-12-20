@@ -3,15 +3,9 @@ import { settings, type Setting } from '../db/schema';
 import { eq } from 'drizzle-orm';
 
 export class SettingsService {
-  async getAll(): Promise<Record<string, string>> {
+  async getAll(): Promise<Setting[]> {
     const allSettings = await db.select().from(settings);
-    return allSettings.reduce(
-      (acc, setting) => {
-        acc[setting.key] = setting.value;
-        return acc;
-      },
-      {} as Record<string, string>
-    );
+    return allSettings;
   }
 
   async get(key: string): Promise<string | null> {

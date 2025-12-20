@@ -2,6 +2,21 @@ import { HttpClientService } from './http-client.service';
 import { FlaresolverrService } from './flaresolverr.service';
 import { ParserService, ParsedResult } from './parser.service';
 import { SettingsService } from './settings.service';
+import { CacheService } from './cache.service';
+
+/**
+ * Custom error class that preserves HTTP status code
+ */
+class HttpError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public url: string
+  ) {
+    super(message);
+    this.name = 'HttpError';
+  }
+}
 
 export interface IndexerConfig {
   id: number;
@@ -37,11 +52,15 @@ export class ScraperService {
   private httpClient: HttpClientService;
   private flaresolverrService: FlaresolverrService;
   private parserService: ParserService;
+  private cacheService: CacheService;
+  private cacheEnabled: boolean;
 
-  constructor(settingsService: SettingsService) {
+  constructor(settingsService: SettingsService, cacheEnabled: boolean = true) {
     this.httpClient = new HttpClientService();
     this.flaresolverrService = new FlaresolverrService(settingsService);
     this.parserService = new ParserService();
+    this.cacheService = new CacheService();
+    this.cacheEnabled = cacheEnabled;
   }
 
   /**
@@ -64,6 +83,22 @@ export class ScraperService {
         url: indexer.url,
         statusCode: 0,
       };
+    }
+
+    // Check cache first
+    if (this.cacheEnabled && query) {
+      const cacheKey = `indexer:${indexer.id}:query:${query}`;
+      const cached = await this.cacheService.get(searchUrl, { query, indexerId: indexer.id });
+
+      if (cached) {
+        try {
+          const cachedResult = JSON.parse(cached) as ScraperResult;
+          return { ...cachedResult, fromCache: true } as any;
+        } catch (error) {
+          // Invalid cache, continue with fresh request
+          console.warn('Invalid cache data, fetching fresh');
+        }
+      }
     }
 
     // Determine if we should use Flaresolverr
@@ -122,7 +157,7 @@ export class ScraperService {
       // Parse the results
       const parsedResults = this.parseResults(html, indexer, actualUrl);
 
-      return {
+      const result: ScraperResult = {
         success: true,
         data: parsedResults,
         html,
@@ -130,14 +165,28 @@ export class ScraperService {
         url: actualUrl,
         statusCode,
       };
+
+      // Cache the result
+      if (this.cacheEnabled && query) {
+        await this.cacheService.set(
+          searchUrl,
+          JSON.stringify(result),
+          { query, indexerId: indexer.id }
+        );
+      }
+
+      return result;
     } catch (error: any) {
+      // Extract status code from HttpError if available
+      const statusCode = error instanceof HttpError ? error.statusCode : 0;
+
       return {
         success: false,
         data: [],
         error: error.message,
         usedFlaresolverr,
         url: actualUrl,
-        statusCode: 0,
+        statusCode,
       };
     }
   }
@@ -160,7 +209,11 @@ export class ScraperService {
     }
 
     if (response.status >= 400) {
-      throw new Error(`HTTP ${response.status}: Failed to fetch ${url}`);
+      throw new HttpError(
+        `HTTP ${response.status}: Failed to fetch ${url}`,
+        response.status,
+        url
+      );
     }
 
     return {
@@ -325,5 +378,202 @@ export class ScraperService {
         error: error.message,
       };
     }
+  }
+
+  /**
+   * Auto-configure indexer by analyzing forms on the page
+   */
+  public async autoConfigureFromUrl(
+    baseUrl: string,
+    useFlaresolverr: boolean = false
+  ): Promise<{
+    success: boolean;
+    config?: {
+      searchUrl: string | null;
+      searchMethod: string | null;
+      searchQueryParam: string | null;
+      searchParams: Record<string, string>;
+      rssUrl: string | null;
+    };
+    error?: string;
+    message?: string;
+  }> {
+    try {
+      let html: string;
+
+      // Fetch the page (with or without Flaresolverr)
+      if (useFlaresolverr && (await this.flaresolverrService.isEnabled())) {
+        try {
+          const result = await this.flaresolverrService.solve(baseUrl, {
+            method: 'GET',
+          });
+          html = result.html;
+        } catch (flareError: any) {
+          console.warn('Flaresolverr failed, falling back to direct request:', flareError.message);
+          const response = await this.httpClient.get(baseUrl);
+          html = response.data;
+        }
+      } else {
+        const response = await this.httpClient.get(baseUrl);
+        html = response.data;
+      }
+
+      // Extract forms and feeds from HTML
+      const forms = this.parserService.extractForms(html);
+      const feeds = this.parserService.extractFeedLinks(html, baseUrl);
+
+      // Analyze forms to suggest configuration
+      let searchUrl: string | null = null;
+      let searchMethod: string | null = null;
+      let searchQueryParam: string | null = null;
+      let searchParams: Record<string, string> = {};
+      let rssUrl: string | null = null;
+
+      // Find the most likely search form
+      if (forms && forms.length > 0) {
+        const searchForm = this.findBestSearchForm(forms, baseUrl);
+
+        if (searchForm) {
+          // Build search URL
+          const urlObj = new URL(baseUrl);
+          if (searchForm.action) {
+            try {
+              searchUrl = new URL(searchForm.action, baseUrl).toString();
+            } catch {
+              searchUrl = baseUrl;
+            }
+          } else {
+            searchUrl = baseUrl;
+          }
+
+          searchMethod = searchForm.method?.toUpperCase() || 'GET';
+
+          // Find the query parameter (most likely text input field)
+          const queryField = this.findQueryField(searchForm.fields);
+          if (queryField) {
+            searchQueryParam = queryField.name;
+          }
+
+          // Extract other parameters (non-query fields)
+          searchForm.fields.forEach((field: any) => {
+            if (field.name && field.name !== searchQueryParam) {
+              // For hidden fields or fields with default values
+              if (field.type === 'hidden' || field.value) {
+                searchParams[field.name] = field.value || '';
+              }
+            }
+          });
+        }
+      }
+
+      // Find RSS feed
+      if (feeds && feeds.length > 0) {
+        rssUrl = feeds[0].url;
+      }
+
+      if (!searchUrl && !rssUrl) {
+        return {
+          success: false,
+          error: 'No search forms or RSS feeds found on this page',
+        };
+      }
+
+      return {
+        success: true,
+        config: {
+          searchUrl,
+          searchMethod,
+          searchQueryParam,
+          searchParams,
+          rssUrl,
+        },
+        message: searchUrl
+          ? `Found search form with ${forms?.length || 0} form(s)`
+          : 'No search form found, but RSS feed detected',
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Find the most likely search form from detected forms
+   */
+  private findBestSearchForm(forms: Array<any>, baseUrl: string): any {
+    // Prioritize forms with search-related indicators
+    const searchKeywords = ['search', 'query', 'q', 'find', 's'];
+
+    // Score each form
+    let bestForm = forms[0];
+    let bestScore = 0;
+
+    for (const form of forms) {
+      let score = 0;
+
+      // Check action URL for search keywords
+      if (form.action) {
+        const actionLower = form.action.toLowerCase();
+        if (searchKeywords.some(keyword => actionLower.includes(keyword))) {
+          score += 10;
+        }
+      }
+
+      // Check if form has text input fields
+      const textFields = form.fields.filter(
+        (f: any) => f.type === 'text' || f.type === 'search'
+      );
+      score += textFields.length * 5;
+
+      // Check field names for search keywords
+      for (const field of form.fields) {
+        if (field.name) {
+          const nameLower = field.name.toLowerCase();
+          if (searchKeywords.some(keyword => nameLower.includes(keyword))) {
+            score += 15;
+          }
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestForm = form;
+      }
+    }
+
+    return bestScore > 0 ? bestForm : forms[0];
+  }
+
+  /**
+   * Find the most likely query field from form fields
+   */
+  private findQueryField(fields: Array<any>): any {
+    // Common query parameter names
+    const commonQueryNames = ['q', 'query', 'search', 's', 'keyword', 'term', 'find'];
+
+    // First, try exact matches
+    for (const name of commonQueryNames) {
+      const field = fields.find(
+        (f: any) =>
+          f.name?.toLowerCase() === name &&
+          (f.type === 'text' || f.type === 'search' || !f.type)
+      );
+      if (field) return field;
+    }
+
+    // Then try partial matches
+    for (const name of commonQueryNames) {
+      const field = fields.find(
+        (f: any) =>
+          f.name?.toLowerCase().includes(name) &&
+          (f.type === 'text' || f.type === 'search' || !f.type)
+      );
+      if (field) return field;
+    }
+
+    // Finally, return the first text input field
+    return fields.find((f: any) => f.type === 'text' || f.type === 'search');
   }
 }

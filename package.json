@@ -1,0 +1,32 @@
+{
+  "name": "tinkarr",
+  "version": "1.0.0",
+  "description": "Tinkarr - Universal Torznab API adapter with web interface",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=backend",
+    "build": "npm run build --workspace=frontend && npm run build --workspace=backend",
+    "start": "NODE_ENV=production npm run start --workspace=backend",
+    "install:all": "npm install && npm install --workspace=backend && npm install --workspace=frontend",
+    "clean": "rm -rf backend/dist backend/public frontend/dist node_modules backend/node_modules frontend/node_modules",
+    "migrate": "npm run migrate --workspace=backend",
+    "seed": "npm run seed --workspace=backend",
+    "test": "npm run test --workspace=backend"
+  },
+  "keywords": [
+    "torznab",
+    "indexer",
+    "scraper",
+    "arr"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=9.0.0"
+  }
+}

@@ -9,9 +9,10 @@ import type {
   TestIndexerResponse,
   AutoDetectResponse,
   FlaresolverrTestResponse,
+  AutoConfigureResponse,
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -151,6 +152,17 @@ class ApiClient {
   async autoDetectIndexer(id: number): Promise<AutoDetectResponse> {
     const { data } = await this.client.post<AutoDetectResponse>(
       `/indexers/${id}/auto-detect`
+    );
+    return data;
+  }
+
+  async autoConfigureFromUrl(
+    url: string,
+    useFlaresolverr: boolean = false
+  ): Promise<AutoConfigureResponse> {
+    const { data } = await this.client.post<AutoConfigureResponse>(
+      '/indexers/auto-configure',
+      { url, useFlaresolverr }
     );
     return data;
   }

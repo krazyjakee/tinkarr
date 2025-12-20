@@ -14,7 +14,7 @@ async function seed() {
     const apiKey = crypto.randomBytes(32).toString('hex');
 
     // Hash default password
-    const defaultPassword = 'admin';
+    const defaultPassword = 'admin123';
     const passwordHash = await bcrypt.hash(defaultPassword, 12);
 
     // Create admin user
@@ -29,7 +29,7 @@ async function seed() {
 
       console.log('✓ Created admin user');
       console.log('  Username: admin');
-      console.log('  Password: admin');
+      console.log('  Password: admin123');
       console.log(`  API Key: ${apiKey}`);
       console.log('  IMPORTANT: Change the password after first login!');
     } else {
@@ -39,7 +39,7 @@ async function seed() {
     // Create default settings
     const defaultSettings = [
       { key: 'flaresolverr_url', value: process.env.FLARESOLVERR_URL || 'http://localhost:8191' },
-      { key: 'flaresolverr_enabled', value: process.env.FLARESOLVERR_ENABLED || 'false' },
+      { key: 'flaresolverr_enabled', value: process.env.FLARESOLVERR_ENABLED || 'true' },
       { key: 'max_results_per_indexer', value: process.env.MAX_RESULTS_PER_INDEXER || '100' },
       { key: 'cache_ttl_seconds', value: process.env.CACHE_TTL_SECONDS || '600' },
       { key: 'global_timeout_ms', value: process.env.GLOBAL_TIMEOUT_MS || '30000' },

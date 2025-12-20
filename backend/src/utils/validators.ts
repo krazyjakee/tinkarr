@@ -15,22 +15,22 @@ export const registerSchema = z.object({
 export const createIndexerSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   url: z.string().url('Invalid URL'),
-  favicon: z.string().optional(),
+  favicon: z.string().nullish(),
   requiresFlaresolverr: z.boolean().default(false),
   enabled: z.boolean().default(true),
 
-  searchType: z.enum(['html_form', 'rest_api', 'none']).optional(),
-  searchUrl: z.string().url().optional(),
-  searchMethod: z.enum(['GET', 'POST']).optional(),
-  searchParams: z.record(z.any()).optional(),
-  searchQueryParam: z.string().optional(),
+  searchType: z.enum(['html_form', 'rest_api', 'none']).nullish(),
+  searchUrl: z.string().url().nullish(),
+  searchMethod: z.enum(['GET', 'POST']).nullish(),
+  searchParams: z.record(z.any()).nullish(),
+  searchQueryParam: z.string().nullish(),
 
-  rssUrl: z.string().url().optional(),
-  rssType: z.enum(['rest_api', 'static', 'none']).optional(),
-  rssParams: z.record(z.any()).optional(),
+  rssUrl: z.string().url().nullish(),
+  rssType: z.enum(['rest_api', 'static', 'none']).nullish(),
+  rssParams: z.record(z.any()).nullish(),
 
-  resultSelector: z.string().optional(),
-  resultMapping: z.record(z.string()).optional(),
+  resultSelector: z.string().nullish(),
+  resultMapping: z.record(z.string()).nullish(),
 });
 
 export const updateIndexerSchema = createIndexerSchema.partial();

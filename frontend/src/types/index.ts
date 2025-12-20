@@ -101,3 +101,16 @@ export interface FlaresolverrTestResponse {
   message: string;
   version?: string;
 }
+
+export interface AutoConfigureResponse {
+  success: boolean;
+  config?: {
+    searchUrl: string | null;
+    searchMethod: string | null;
+    searchQueryParam: string | null;
+    searchParams: Record<string, string>;
+    rssUrl: string | null;
+  };
+  error?: string;
+  message?: string;
+}
