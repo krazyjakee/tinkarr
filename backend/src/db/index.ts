@@ -11,8 +11,14 @@ const dbPath = process.env.DATABASE_URL || './data/tinkarr.db';
 const dbDir = path.dirname(dbPath);
 
 // Create data directory if it doesn't exist
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+try {
+  if (!fs.existsSync(dbDir)) {
+    console.log(`Creating database directory: ${dbDir}`);
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+} catch (error) {
+  console.error(`Failed to create database directory: ${dbDir}`, error);
+  throw error;
 }
 
 // Initialize SQLite database

@@ -38,7 +38,7 @@ async function seed() {
 
     // Create default settings
     const defaultSettings = [
-      { key: 'flaresolverr_url', value: process.env.FLARESOLVERR_URL || 'http://localhost:8191' },
+      { key: 'flaresolverr_url', value: process.env.FLARESOLVERR_URL || 'http://localhost:8191/v1' },
       { key: 'flaresolverr_enabled', value: process.env.FLARESOLVERR_ENABLED || 'true' },
       { key: 'max_results_per_indexer', value: process.env.MAX_RESULTS_PER_INDEXER || '100' },
       { key: 'cache_ttl_seconds', value: process.env.CACHE_TTL_SECONDS || '600' },

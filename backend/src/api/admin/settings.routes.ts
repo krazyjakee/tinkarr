@@ -21,6 +21,20 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// Test Flaresolverr connection - must be BEFORE parametric routes
+router.post('/flaresolverr/test', async (req: Request, res: Response) => {
+  try {
+    const { url } = req.body;
+    const result = await flaresolverrService.testConnection(url);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message
+    });
+  }
+});
+
 // Get specific setting
 router.get('/:key', async (req: Request, res: Response) => {
   try {
@@ -66,19 +80,6 @@ router.delete('/:key', async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
-  }
-});
-
-// Test Flaresolverr connection
-router.post('/flaresolverr/test', async (req: Request, res: Response) => {
-  try {
-    const result = await flaresolverrService.testConnection();
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: (error as Error).message
-    });
   }
 });
 

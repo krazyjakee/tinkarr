@@ -194,9 +194,10 @@ class ApiClient {
     await this.client.delete(`/settings/${key}`);
   }
 
-  async testFlaresolverr(): Promise<FlaresolverrTestResponse> {
+  async testFlaresolverr(url?: string): Promise<FlaresolverrTestResponse> {
     const { data } = await this.client.post<FlaresolverrTestResponse>(
-      '/settings/flaresolverr/test'
+      '/settings/flaresolverr/test',
+      { url }
     );
     return data;
   }

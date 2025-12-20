@@ -19,7 +19,7 @@ import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 dotenv.config();
 
 const app: Application = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8677;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Middleware
@@ -85,7 +85,7 @@ if (NODE_ENV === 'production') {
   // Proxy all non-API requests to Vite dev server
   // API routes are already handled above, so they won't reach this middleware
   app.use('/', createProxyMiddleware({
-    target: `http://localhost:${VITE_PORT}`,
+    target: `http://0.0.0.0:${VITE_PORT}`,
     changeOrigin: true,
     ws: true, // Enable websocket proxy for HMR
   }));
@@ -103,11 +103,11 @@ app.listen(PORT, () => {
 ║                                       ║
 ║   🚀 Tinkarr Unified Service          ║
 ║                                       ║
-║   Running on: http://localhost:${PORT}     ║
+║   Running on: http://0.0.0.0:${PORT}     ║
 ║   Environment: ${NODE_ENV.padEnd(11)}         ║
 ║   Mode: ${mode.padEnd(19)} ║
 ║                                       ║
-║   Frontend: http://localhost:${PORT}      ║
+║   Frontend: http://0.0.0.0:${PORT}      ║
 ║   Health: GET /health                 ║
 ║   API: /api/*                         ║
 ║                                       ║${NODE_ENV === 'production' ? `

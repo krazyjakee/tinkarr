@@ -44,7 +44,7 @@ trap cleanup EXIT
 
 # Test 1: API endpoint
 echo -e "${BLUE}→ Testing API endpoint (/health)...${NC}"
-API_RESPONSE=$(curl -s http://localhost:3000/health)
+API_RESPONSE=$(curl -s http://localhost:8677/health)
 if echo "$API_RESPONSE" | grep -q "ok"; then
     echo -e "${GREEN}✓ API working${NC}"
 else
@@ -55,7 +55,7 @@ fi
 
 # Test 2: Frontend serving
 echo -e "${BLUE}→ Testing frontend serving (/)...${NC}"
-FRONTEND_RESPONSE=$(curl -s http://localhost:3000/)
+FRONTEND_RESPONSE=$(curl -s http://localhost:8677/)
 if echo "$FRONTEND_RESPONSE" | grep -q '<div id="root">'; then
     echo -e "${GREEN}✓ Frontend serving working${NC}"
 else
@@ -66,7 +66,7 @@ fi
 
 # Test 3: Static assets
 echo -e "${BLUE}→ Testing static assets (/vite.svg)...${NC}"
-ASSET_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/vite.svg)
+ASSET_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8677/vite.svg)
 if [ "$ASSET_RESPONSE" = "200" ]; then
     echo -e "${GREEN}✓ Static assets working${NC}"
 else
@@ -76,7 +76,7 @@ fi
 
 # Test 4: SPA routing
 echo -e "${BLUE}→ Testing SPA routing (/indexers)...${NC}"
-SPA_RESPONSE=$(curl -s http://localhost:3000/indexers)
+SPA_RESPONSE=$(curl -s http://localhost:8677/indexers)
 if echo "$SPA_RESPONSE" | grep -q '<div id="root">'; then
     echo -e "${GREEN}✓ SPA routing working${NC}"
 else
@@ -87,7 +87,7 @@ fi
 
 # Test 5: API route precedence
 echo -e "${BLUE}→ Testing API route precedence (/api/...)...${NC}"
-API_ROUTE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/nonexistent)
+API_ROUTE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8677/api/nonexistent)
 if [ "$API_ROUTE_RESPONSE" = "404" ]; then
     echo -e "${GREEN}✓ API routes take precedence${NC}"
 else

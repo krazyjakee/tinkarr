@@ -84,10 +84,12 @@ export class FlaresolverrService {
   /**
    * Test connection to Flaresolverr
    */
-  public async testConnection(): Promise<{ success: boolean; message: string; version?: string }> {
+  public async testConnection(urlOverride?: string): Promise<{ success: boolean; message: string; version?: string }> {
     await this.loadSettings();
 
-    if (!this.flaresolverrUrl) {
+    const testUrl = urlOverride || this.flaresolverrUrl;
+
+    if (!testUrl) {
       return {
         success: false,
         message: 'Flaresolverr URL is not configured',
@@ -95,7 +97,7 @@ export class FlaresolverrService {
     }
 
     try {
-      const response = await this.axiosInstance.post<FlaresolverrResponse>(this.flaresolverrUrl, {
+      const response = await this.axiosInstance.post<FlaresolverrResponse>(testUrl, {
         cmd: 'request.get',
         url: 'https://www.google.com',
         maxTimeout: 15000,

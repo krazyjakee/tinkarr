@@ -11,10 +11,30 @@ const dbPath = process.env.DATABASE_URL || './data/tinkarr.db';
 const dbDir = path.dirname(dbPath);
 
 // Create data directory if it doesn't exist
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+try {
+  if (!fs.existsSync(dbDir)) {
+    console.log(`Creating database directory: ${dbDir}`);
+    fs.mkdirSync(dbDir, { recursive: true });
+    console.log(`Database directory created successfully`);
+  } else {
+    console.log(`Database directory exists: ${dbDir}`);
+  }
+
+  // Test write permissions
+  const testFile = path.join(dbDir, '.write-test');
+  fs.writeFileSync(testFile, 'test');
+  fs.unlinkSync(testFile);
+  console.log(`Database directory is writable`);
+} catch (error) {
+  console.error(`Failed to prepare database directory: ${dbDir}`);
+  console.error(`Error: ${error}`);
+  const uid = process.getuid ? process.getuid() : 'unknown';
+  const gid = process.getgid ? process.getgid() : 'unknown';
+  console.error(`Current user: UID=${uid}, GID=${gid}`);
+  process.exit(1);
 }
 
+console.log(`Opening database at: ${dbPath}`);
 const sqlite = new Database(dbPath);
 const db = drizzle(sqlite);
 
@@ -22,7 +42,12 @@ async function runMigrations() {
   console.log('Running migrations...');
 
   try {
-    await migrate(db, { migrationsFolder: './src/db/migrations' });
+    // Use different paths for development vs production
+    const migrationsFolder = process.env.NODE_ENV === 'production'
+      ? './migrations'
+      : './src/db/migrations';
+
+    await migrate(db, { migrationsFolder });
     console.log('Migrations completed successfully');
   } catch (error) {
     console.error('Migration failed:', error);

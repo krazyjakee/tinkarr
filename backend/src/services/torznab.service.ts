@@ -158,7 +158,7 @@ export class TorznabService {
     xml += '  <channel>\n';
     xml += '    <title>' + this.escapeXml(indexerTitle) + '</title>\n';
     xml += '    <description>Tinkarr - ' + this.escapeXml(indexerTitle) + '</description>\n';
-    xml += '    <link>http://localhost:3000</link>\n';
+    xml += '    <link>http://0.0.0.0:8677</link>\n';
     xml += '    <language>en-us</language>\n';
 
     // Add items

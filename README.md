@@ -101,7 +101,7 @@ docker-compose up -d
 docker-compose logs -f tinkarr
 ```
 
-**The unified service (backend + frontend) will be available on `http://localhost:3000`**
+**The unified service (backend + frontend) will be available on `http://localhost:8677`**
 
 For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md)
 
@@ -113,7 +113,7 @@ For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 #### Development Mode (Unified Service with Hot Reload)
 
-The development server runs both frontend and backend on a single port (3000) with hot module replacement:
+The development server runs both frontend and backend on a single port (8677) with hot module replacement:
 
 ```bash
 # Clone the repository
@@ -142,9 +142,9 @@ npm run dev
 ```
 
 **Access:**
-- Unified Service: `http://localhost:3000` (frontend UI with HMR + backend API)
-- Health Check: `http://localhost:3000/health`
-- API Endpoints: `http://localhost:3000/api/*`
+- Unified Service: `http://localhost:8677` (frontend UI with HMR + backend API)
+- Health Check: `http://localhost:8677/health`
+- API Endpoints: `http://localhost:8677/api/*`
 
 The backend proxies frontend requests to the Vite dev server, giving you fast hot reload while maintaining a single entry point.
 
@@ -161,7 +161,7 @@ Test the production build locally:
 ```
 
 **Access:**
-- Unified Service: `http://localhost:3000` (serves both API and static frontend)
+- Unified Service: `http://localhost:8677` (serves both API and static frontend)
 
 ### First Steps
 
@@ -173,7 +173,7 @@ Test the production build locally:
 
 3. **Configure in *arr app**:
    - Indexer Type: Torznab
-   - URL: `http://localhost:3000/api/torznab/{indexerId}`
+   - URL: `http://localhost:8677/api/torznab/{indexerId}`
    - API Key: From login response
 
 ## API Documentation
@@ -316,7 +316,7 @@ tinkarr/
 
 **Root workspace:**
 ```bash
-npm run dev          # Start unified dev service (backend + frontend on port 3000)
+npm run dev          # Start unified dev service (backend + frontend on port 8677)
 npm run build        # Build both frontend and backend for production
 npm start            # Run production build
 npm run install:all  # Install all dependencies (root + workspaces)
@@ -369,7 +369,7 @@ npm run build        # Build frontend for production
 2. Add new indexer → Torznab
 3. Configure:
    - **Name**: Your indexer name
-   - **URL**: `http://localhost:3000/api/torznab/{indexerId}`
+   - **URL**: `http://localhost:8677/api/torznab/{indexerId}`
    - **API Key**: Your Tinkarr API key
    - **Categories**: Select appropriate categories
 4. Test and save

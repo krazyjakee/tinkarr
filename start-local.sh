@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Tinkarr Local Development Startup Script
-# Starts the unified service (backend + frontend) on port 3000
+# Starts the unified service (backend + frontend) on port 8677
 
 # Color codes for output
 RED='\033[0;31m'
@@ -146,9 +146,9 @@ if [ "$START_BACKEND" = true ]; then
     fi
 
     echo ""
-    print_info "Development Mode: Unified service on port 3000"
+    print_info "Development Mode: Unified service on port 8677"
     print_info "  - Backend proxies to Vite for hot reload"
-    print_info "  - Frontend served with HMR at http://localhost:3000"
+    print_info "  - Frontend served with HMR at http://localhost:8677"
     print_info ""
     print_info "For production build:"
     print_info "  ./build.sh && ./start-production.sh"
@@ -194,9 +194,9 @@ print_header "Starting Unified Service"
 cd "$ORIGINAL_DIR/backend"
 
 echo ""
-print_success "Starting Tinkarr on http://localhost:3000"
+print_success "Starting Tinkarr on http://localhost:8677"
 print_cyan "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-print_cyan "   Unified Service: http://localhost:3000"
+print_cyan "   Unified Service: http://localhost:8677"
 print_cyan "   - Frontend UI served with HMR"
 print_cyan "   - Backend API at /api/*"
 print_cyan "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

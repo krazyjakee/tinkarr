@@ -25,7 +25,7 @@ if [ ! -d "backend/dist" ] || [ ! -d "backend/public" ]; then
 fi
 
 # Start backend
-echo -e "${GREEN}→ Starting unified service on http://localhost:3000${NC}"
+echo -e "${GREEN}→ Starting unified service on http://0.0.0.0:8677${NC}"
 echo -e "${BLUE}  - Backend API: /api/*${NC}"
 echo -e "${BLUE}  - Frontend UI: /${NC}"
 echo -e "${BLUE}  - Health Check: /health${NC}"

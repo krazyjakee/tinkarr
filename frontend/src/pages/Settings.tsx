@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 export const Settings = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const [flaresolverrUrl, setFlaresolverrUrl] = useState('http://localhost:8191');
+  const [flaresolverrUrl, setFlaresolverrUrl] = useState('http://localhost:8191/v1');
   const [flaresolverrEnabled, setFlaresolverrEnabled] = useState(false);
   const [maxResults, setMaxResults] = useState('100');
   const [cacheTtl, setCacheTtl] = useState('600');
@@ -70,7 +70,7 @@ export const Settings = () => {
   });
 
   const testFlaresolverrMutation = useMutation({
-    mutationFn: () => apiClient.testFlaresolverr(),
+    mutationFn: (url: string) => apiClient.testFlaresolverr(url),
     onSuccess: (data) => {
       if (data.success) {
         setSuccess(`Flaresolverr connected! Version: ${data.version}`);
@@ -114,7 +114,7 @@ export const Settings = () => {
   };
 
   const handleTestFlaresolverr = () => {
-    testFlaresolverrMutation.mutate();
+    testFlaresolverrMutation.mutate(flaresolverrUrl);
   };
 
   const handleRegenerateApiKey = () => {
