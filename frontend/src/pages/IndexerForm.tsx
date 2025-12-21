@@ -30,6 +30,13 @@ export const IndexerForm = () => {
   const [rssUrlGeneratorCode, setRssUrlGeneratorCode] = useState('');
   const [rssParamsMode, setRssParamsMode] = useState<'static' | 'code'>('static');
   const [error, setError] = useState('');
+  const [exportData, setExportData] = useState('');
+  const [importData, setImportData] = useState('');
+  const [importError, setImportError] = useState('');
+  const [showExport, setShowExport] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   const { data: indexer } = useQuery({
     queryKey: ['indexer', id],
@@ -203,14 +210,101 @@ export const IndexerForm = () => {
     }));
   };
 
-  return (
-    <Layout>
-      <div className="px-4 py-6 sm:px-0">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
-          {isEdit ? 'Edit Indexer' : 'Add Indexer'}
-        </h1>
+  const handleExport = () => {
+    try {
+      // Prepare the export data with all current form state
+      const exportObj = {
+        ...formData,
+        resultMappingText,
+        resultMappingCode,
+        mappingType,
+        searchParamsText,
+        rssParamsText,
+        rssUrlGeneratorCode,
+        rssParamsMode,
+      };
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+      // Convert to JSON and then to base64
+      const jsonStr = JSON.stringify(exportObj, null, 2);
+      const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+      setExportData(base64);
+      setShowExport(true);
+      setShowImport(false);
+    } catch (err: any) {
+      setError('Failed to export: ' + err.message);
+    }
+  };
+
+  const handleImport = () => {
+    setImportError('');
+    try {
+      if (!importData.trim()) {
+        setImportError('Please enter base64 data to import');
+        return;
+      }
+
+      // Decode base64 and parse JSON
+      const jsonStr = decodeURIComponent(escape(atob(importData.trim())));
+      const importObj = JSON.parse(jsonStr);
+
+      // Update form data
+      const {
+        resultMappingText: impResultMappingText,
+        resultMappingCode: impResultMappingCode,
+        mappingType: impMappingType,
+        searchParamsText: impSearchParamsText,
+        rssParamsText: impRssParamsText,
+        rssUrlGeneratorCode: impRssUrlGeneratorCode,
+        rssParamsMode: impRssParamsMode,
+        ...impFormData
+      } = importObj;
+
+      // Set all the form data
+      setFormData(impFormData);
+
+      // Set editor states
+      if (impResultMappingText !== undefined) setResultMappingText(impResultMappingText);
+      if (impResultMappingCode !== undefined) setResultMappingCode(impResultMappingCode);
+      if (impMappingType !== undefined) setMappingType(impMappingType);
+      if (impSearchParamsText !== undefined) setSearchParamsText(impSearchParamsText);
+      if (impRssParamsText !== undefined) setRssParamsText(impRssParamsText);
+      if (impRssUrlGeneratorCode !== undefined) setRssUrlGeneratorCode(impRssUrlGeneratorCode);
+      if (impRssParamsMode !== undefined) setRssParamsMode(impRssParamsMode);
+
+      // Clear import data and show success
+      setImportData('');
+      setShowImport(false);
+      setError('');
+    } catch (err: any) {
+      setImportError('Failed to import: ' + (err.message || 'Invalid data format'));
+    }
+  };
+
+  const handleCopyToClipboard = () => {
+    navigator.clipboard.writeText(exportData).then(() => {
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    });
+  };
+
+  return (
+    <>
+      <Layout>
+        <div className="px-4 py-6 sm:px-0">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              {isEdit ? 'Edit Indexer' : 'Add Indexer'}
+            </h1>
+            <button
+              type="button"
+              onClick={() => setShowModal(true)}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+              Import / Export
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
             <div className="rounded-md bg-red-50 dark:bg-red-900 p-4">
               <div className="text-sm text-red-800 dark:text-red-200">{error}</div>
@@ -403,15 +497,15 @@ export const IndexerForm = () => {
             </div>
 
             {/* Tab Headers */}
-            <div className="border-b border-gray-200">
+            <div className="border-b border-gray-200 dark:border-gray-700">
               <nav className="-mb-px flex space-x-8" aria-label="RSS Params Mode">
                 <button
                   type="button"
                   onClick={() => setRssParamsMode('static')}
                   className={`${
                     rssParamsMode === 'static'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                 >
                   Static Parameters
@@ -421,8 +515,8 @@ export const IndexerForm = () => {
                   onClick={() => setRssParamsMode('code')}
                   className={`${
                     rssParamsMode === 'code'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                 >
                   Code-Based Generator
@@ -509,15 +603,15 @@ export const IndexerForm = () => {
             </div>
 
             {/* Tab Headers */}
-            <div className="border-b border-gray-200">
+            <div className="border-b border-gray-200 dark:border-gray-700">
               <nav className="-mb-px flex space-x-8" aria-label="Mapping Type">
                 <button
                   type="button"
                   onClick={() => setMappingType('json')}
                   className={`${
                     mappingType === 'json'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                 >
                   JSON Mapping
@@ -527,8 +621,8 @@ export const IndexerForm = () => {
                   onClick={() => setMappingType('code')}
                   className={`${
                     mappingType === 'code'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                 >
                   JavaScript Code
@@ -703,7 +797,137 @@ export const IndexerForm = () => {
             </button>
           </div>
         </form>
-      </div>
-    </Layout>
+        </div>
+      </Layout>
+
+      {/* Import/Export Modal */}
+      {showModal && (
+          <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            {/* Background overlay */}
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              aria-hidden="true"
+              onClick={() => setShowModal(false)}
+            ></div>
+
+            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+              {/* Center modal */}
+              <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+              {/* Modal panel */}
+              <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full relative z-10">
+                <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <div className="sm:flex sm:items-start">
+                    <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                      <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4" id="modal-title">
+                        Import / Export Configuration
+                      </h3>
+
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                        Export your indexer configuration as base64 to share or backup, or import a configuration from base64.
+                      </p>
+
+                      <div className="flex space-x-3 mb-6">
+                        <button
+                          type="button"
+                          onClick={handleExport}
+                          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        >
+                          Export Configuration
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowImport(!showImport);
+                            setShowExport(false);
+                            setImportError('');
+                          }}
+                          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        >
+                          Import Configuration
+                        </button>
+                      </div>
+
+                      {showExport && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Exported Configuration (Base64)
+                            </label>
+                            <textarea
+                              readOnly
+                              value={exportData}
+                              rows={8}
+                              className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono text-xs"
+                            />
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            <button
+                              type="button"
+                              onClick={handleCopyToClipboard}
+                              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                            >
+                              Copy to Clipboard
+                            </button>
+                            {copySuccess && (
+                              <span className="text-sm text-green-600 dark:text-green-400">
+                                Copied!
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {showImport && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Paste Base64 Configuration
+                            </label>
+                            <textarea
+                              value={importData}
+                              onChange={(e) => setImportData(e.target.value)}
+                              rows={8}
+                              placeholder="Paste your base64 encoded configuration here..."
+                              className="block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono text-xs"
+                            />
+                          </div>
+                          {importError && (
+                            <div className="text-sm text-red-600 dark:text-red-400">
+                              {importError}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleImport}
+                            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                          >
+                            Import Configuration
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowModal(false);
+                      setShowExport(false);
+                      setShowImport(false);
+                      setImportError('');
+                      setCopySuccess(false);
+                    }}
+                    className="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+    </>
   );
 };

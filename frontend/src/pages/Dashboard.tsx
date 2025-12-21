@@ -20,16 +20,16 @@ export const Dashboard = () => {
   return (
     <Layout>
       <div className="px-4 py-6 sm:px-0">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Dashboard</h1>
 
         {isLoading ? (
           <div className="text-center py-12">
-            <div className="text-lg text-gray-600">Loading...</div>
+            <div className="text-lg text-gray-600 dark:text-gray-400">Loading...</div>
           </div>
         ) : (
           <>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 mb-8">
-              <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
                 <div className="px-4 py-5 sm:p-6">
                   <div className="flex items-center">
                     <div className="flex-shrink-0 bg-indigo-500 rounded-md p-3">
@@ -49,10 +49,10 @@ export const Dashboard = () => {
                     </div>
                     <div className="ml-5 w-0 flex-1">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">
+                        <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
                           Total Indexers
                         </dt>
-                        <dd className="text-3xl font-semibold text-gray-900">
+                        <dd className="text-3xl font-semibold text-gray-900 dark:text-white">
                           {totalIndexers}
                         </dd>
                       </dl>
@@ -61,7 +61,7 @@ export const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
                 <div className="px-4 py-5 sm:p-6">
                   <div className="flex items-center">
                     <div className="flex-shrink-0 bg-green-500 rounded-md p-3">
@@ -81,10 +81,10 @@ export const Dashboard = () => {
                     </div>
                     <div className="ml-5 w-0 flex-1">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">
+                        <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
                           Enabled
                         </dt>
-                        <dd className="text-3xl font-semibold text-gray-900">
+                        <dd className="text-3xl font-semibold text-gray-900 dark:text-white">
                           {enabledIndexers}
                         </dd>
                       </dl>
@@ -93,7 +93,7 @@ export const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
                 <div className="px-4 py-5 sm:p-6">
                   <div className="flex items-center">
                     <div className="flex-shrink-0 bg-red-500 rounded-md p-3">
@@ -113,10 +113,10 @@ export const Dashboard = () => {
                     </div>
                     <div className="ml-5 w-0 flex-1">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">
+                        <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
                           Disabled
                         </dt>
-                        <dd className="text-3xl font-semibold text-gray-900">
+                        <dd className="text-3xl font-semibold text-gray-900 dark:text-white">
                           {disabledIndexers}
                         </dd>
                       </dl>
@@ -126,21 +126,21 @@ export const Dashboard = () => {
               </div>
             </div>
 
-            <div className="bg-white shadow rounded-lg p-6">
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                   Recent Indexers
                 </h2>
                 <Link
                   to="/indexers"
-                  className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                  className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300"
                 >
                   View all →
                 </Link>
               </div>
               {totalIndexers === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-gray-500 mb-4">No indexers configured yet</p>
+                  <p className="text-gray-500 dark:text-gray-400 mb-4">No indexers configured yet</p>
                   <Link
                     to="/indexers"
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
@@ -153,7 +153,7 @@ export const Dashboard = () => {
                   {indexers?.slice(0, 5).map((indexer) => (
                     <div
                       key={indexer.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                      className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
                     >
                       <div className="flex items-center">
                         {indexer.favicon && (
@@ -164,17 +164,17 @@ export const Dashboard = () => {
                           />
                         )}
                         <div>
-                          <h3 className="text-sm font-medium text-gray-900">
+                          <h3 className="text-sm font-medium text-gray-900 dark:text-white">
                             {indexer.title}
                           </h3>
-                          <p className="text-sm text-gray-500">{indexer.url}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{indexer.url}</p>
                         </div>
                       </div>
                       <span
                         className={`px-3 py-1 text-xs font-medium rounded-full ${
                           indexer.enabled
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
+                            : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400'
                         }`}
                       >
                         {indexer.enabled ? 'Enabled' : 'Disabled'}
