@@ -37,16 +37,27 @@ const baseIndexerSchema = z.object({
 
 export const createIndexerSchema = baseIndexerSchema.refine(
   (data) => {
-    // Ensure either JSON or code is provided based on mapping type
-    if (data.resultMappingType === 'code') {
-      return data.resultMappingCode !== null && data.resultMappingCode !== undefined;
-    } else if (data.resultMappingType === 'json') {
-      return data.resultMapping !== null && data.resultMapping !== undefined;
+    // If mapping is provided, ensure it matches the type
+    const hasJsonMapping = data.resultMapping !== null && data.resultMapping !== undefined;
+    const hasCodeMapping = data.resultMappingCode !== null && data.resultMappingCode !== undefined && data.resultMappingCode.trim() !== '';
+
+    // If both are provided, that's an error
+    if (hasJsonMapping && hasCodeMapping) {
+      return false;
     }
+
+    // If one is provided, type must match
+    if (hasJsonMapping && data.resultMappingType !== 'json') {
+      return false;
+    }
+    if (hasCodeMapping && data.resultMappingType !== 'code') {
+      return false;
+    }
+
     return true;
   },
   {
-    message: 'Must provide either resultMapping (JSON) or resultMappingCode (code) based on resultMappingType',
+    message: 'Result mapping must match the selected type (JSON or code), and only one can be provided',
     path: ['resultMappingType'],
   }
 );

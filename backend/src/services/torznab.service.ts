@@ -78,10 +78,29 @@ export interface TorznabItem {
   uploadVolumeFactor?: number;
   grabs?: number;
   description?: string;
+  comments?: string;
+
+  // Media IDs
   imdbId?: string;
   tvdbId?: string;
   tvMazeId?: string;
   tmdbId?: string;
+  rageId?: string;
+
+  // Content type
+  type?: string; // 'movie' | 'series' | 'music' | 'book' | 'other'
+
+  // Magnet and torrent info
+  magnetUrl?: string;
+  infoHash?: string;
+
+  // Media URLs
+  coverUrl?: string;
+  bannerUrl?: string;
+
+  // Tracker requirements
+  minimumRatio?: number;
+  minimumSeedTime?: number; // in seconds
 }
 
 export interface TorznabCapabilities {
@@ -95,8 +114,16 @@ export interface TorznabCapabilities {
   categories: Array<{
     id: number;
     name: string;
+    description?: string;
     subCategories?: Array<{ id: number; name: string }>;
   }>;
+  server?: {
+    url?: string;
+    strapline?: string;
+  };
+  retention?: {
+    days: number;
+  };
 }
 
 export class TorznabService {
@@ -110,19 +137,31 @@ export class TorznabService {
     xml += '<caps>\n';
 
     // Server info
-    xml += '  <server version="1.0" title="' + this.escapeXml(indexerTitle) + '" />\n';
+    xml += '  <server version="1.0" title="' + this.escapeXml(indexerTitle) + '"';
+    if (caps.server?.strapline) {
+      xml += ' strapline="' + this.escapeXml(caps.server.strapline) + '"';
+    }
+    if (caps.server?.url) {
+      xml += ' url="' + this.escapeXml(caps.server.url) + '"';
+    }
+    xml += ' />\n';
 
     // Limits
     xml += '  <limits max="100" default="100" />\n';
 
-    // Registration (not supported)
-    xml += '  <registration available="no" open="no" />\n';
+    // Retention (optional)
+    if (caps.retention) {
+      xml += `  <retention days="${caps.retention.days}" />\n`;
+    }
+
+    // Registration (not available via API, but open for manual registration)
+    xml += '  <registration available="no" open="yes" />\n';
 
     // Searching capabilities
     xml += '  <searching>\n';
     xml += `    <search available="${caps.searching.search.available ? 'yes' : 'no'}" supportedParams="${(caps.searching.search.supportedParams || ['q']).join(',')}" />\n`;
-    xml += `    <tv-search available="${caps.searching.tvSearch.available ? 'yes' : 'no'}" supportedParams="${(caps.searching.tvSearch.supportedParams || ['q', 'season', 'ep']).join(',')}" />\n`;
-    xml += `    <movie-search available="${caps.searching.movieSearch.available ? 'yes' : 'no'}" supportedParams="${(caps.searching.movieSearch.supportedParams || ['q', 'imdbid']).join(',')}" />\n`;
+    xml += `    <tv-search available="${caps.searching.tvSearch.available ? 'yes' : 'no'}" supportedParams="${(caps.searching.tvSearch.supportedParams || ['q']).join(',')}" />\n`;
+    xml += `    <movie-search available="${caps.searching.movieSearch.available ? 'yes' : 'no'}" supportedParams="${(caps.searching.movieSearch.supportedParams || ['q']).join(',')}" />\n`;
     if (caps.searching.audioSearch) {
       xml += `    <audio-search available="${caps.searching.audioSearch.available ? 'yes' : 'no'}" supportedParams="${(caps.searching.audioSearch.supportedParams || ['q']).join(',')}" />\n`;
     }
@@ -134,13 +173,20 @@ export class TorznabService {
     // Categories
     xml += '  <categories>\n';
     for (const category of caps.categories) {
-      xml += `    <category id="${category.id}" name="${this.escapeXml(category.name)}">\n`;
-      if (category.subCategories) {
+      xml += `    <category id="${category.id}" name="${this.escapeXml(category.name)}"`;
+      if (category.description) {
+        xml += ` description="${this.escapeXml(category.description)}"`;
+      }
+
+      if (category.subCategories && category.subCategories.length > 0) {
+        xml += '>\n';
         for (const subCat of category.subCategories) {
           xml += `      <subcat id="${subCat.id}" name="${this.escapeXml(subCat.name)}" />\n`;
         }
+        xml += '    </category>\n';
+      } else {
+        xml += ' />\n';
       }
-      xml += '    </category>\n';
     }
     xml += '  </categories>\n';
 
@@ -179,11 +225,32 @@ export class TorznabService {
     let xml = '    <item>\n';
     xml += '      <title>' + this.escapeXml(item.title) + '</title>\n';
     xml += '      <guid>' + this.escapeXml(item.guid) + '</guid>\n';
-    xml += '      <link>' + this.escapeXml(item.link) + '</link>\n';
+
+    if (item.comments) {
+      xml += '      <comments>' + this.escapeXml(item.comments) + '</comments>\n';
+    }
+
     xml += '      <pubDate>' + item.pubDate.toUTCString() + '</pubDate>\n';
+
+    // Add size as direct element (critical for many clients)
+    if (item.size !== undefined) {
+      xml += `      <size>${item.size}</size>\n`;
+    }
 
     if (item.description) {
       xml += '      <description>' + this.escapeXml(item.description) + '</description>\n';
+    }
+
+    xml += '      <link>' + this.escapeXml(item.link) + '</link>\n';
+
+    // Enclosure (standard RSS element)
+    if (item.link && item.size) {
+      // Use appropriate MIME type for magnet links vs torrent files
+      const isMagnet = item.link.startsWith('magnet:');
+      const enclosureType = isMagnet
+        ? 'application/x-bittorrent;x-scheme-handler/magnet'
+        : 'application/x-bittorrent';
+      xml += `      <enclosure url="${this.escapeXml(item.link)}" length="${item.size}" type="${enclosureType}" />\n`;
     }
 
     // Torznab attributes
@@ -216,20 +283,56 @@ export class TorznabService {
     }
 
     // Media IDs
+    if (item.rageId) {
+      xml += `      <torznab:attr name="rageid" value="${this.escapeXml(item.rageId)}" />\n`;
+    }
+
     if (item.imdbId) {
-      xml += `      <torznab:attr name="imdbid" value="${item.imdbId}" />\n`;
+      xml += `      <torznab:attr name="imdb" value="${this.escapeXml(item.imdbId)}" />\n`;
     }
 
     if (item.tvdbId) {
-      xml += `      <torznab:attr name="tvdbid" value="${item.tvdbId}" />\n`;
+      xml += `      <torznab:attr name="tvdbid" value="${this.escapeXml(item.tvdbId)}" />\n`;
     }
 
     if (item.tvMazeId) {
-      xml += `      <torznab:attr name="tvmazeid" value="${item.tvMazeId}" />\n`;
+      xml += `      <torznab:attr name="tvmazeid" value="${this.escapeXml(item.tvMazeId)}" />\n`;
     }
 
     if (item.tmdbId) {
-      xml += `      <torznab:attr name="tmdbid" value="${item.tmdbId}" />\n`;
+      xml += `      <torznab:attr name="tmdbid" value="${this.escapeXml(item.tmdbId)}" />\n`;
+    }
+
+    // Content type
+    if (item.type) {
+      xml += `      <torznab:attr name="type" value="${this.escapeXml(item.type)}" />\n`;
+    }
+
+    // Magnet and torrent info
+    if (item.magnetUrl) {
+      xml += `      <torznab:attr name="magneturl" value="${this.escapeXml(item.magnetUrl)}" />\n`;
+    }
+
+    if (item.infoHash) {
+      xml += `      <torznab:attr name="infohash" value="${this.escapeXml(item.infoHash)}" />\n`;
+    }
+
+    // Media URLs
+    if (item.coverUrl) {
+      xml += `      <torznab:attr name="coverurl" value="${this.escapeXml(item.coverUrl)}" />\n`;
+    }
+
+    if (item.bannerUrl) {
+      xml += `      <torznab:attr name="bannerurl" value="${this.escapeXml(item.bannerUrl)}" />\n`;
+    }
+
+    // Tracker requirements
+    if (item.minimumRatio !== undefined) {
+      xml += `      <torznab:attr name="minimumratio" value="${item.minimumRatio}" />\n`;
+    }
+
+    if (item.minimumSeedTime !== undefined) {
+      xml += `      <torznab:attr name="minimumseedtime" value="${item.minimumSeedTime}" />\n`;
     }
 
     xml += '    </item>\n';
@@ -254,19 +357,25 @@ export class TorznabService {
       // Parse numeric fields
       const seeders = result.seeders ? parseInt(result.seeders, 10) : undefined;
       const peers = result.leechers ? parseInt(result.leechers, 10) : undefined;
+      const grabs = result.grabs ? parseInt(result.grabs, 10) : undefined;
 
       // Map category name to ID if provided, otherwise use default
       const category = result.category
         ? this.mapCategoryNameToId(result.category) || defaultCategory
         : defaultCategory;
 
-      // Generate GUID if not provided
-      const guid = result.guid || result.link || `item-${Date.now()}-${index}`;
+      // Generate GUID - prefer comments URL, then link, then magnet, then generate
+      // GUID should be a stable identifier (preferably a page URL, not a magnet URL)
+      const guid = result.guid || result.comments || result.link || result.magnetUrl || `item-${Date.now()}-${index}`;
+
+      // Parse ratio and seed time
+      const minimumRatio = result.minimumRatio ? parseFloat(result.minimumRatio) : undefined;
+      const minimumSeedTime = result.minimumSeedTime ? parseInt(result.minimumSeedTime, 10) : undefined;
 
       return {
         title: result.title || 'Unknown',
         guid,
-        link: result.link || '',
+        link: result.magnetUrl || result.link || '',
         pubDate,
         size,
         category,
@@ -274,7 +383,31 @@ export class TorznabService {
         peers,
         downloadVolumeFactor: 1,
         uploadVolumeFactor: 1,
+        grabs,
         description: result.description || undefined,
+        comments: result.comments || undefined,
+
+        // Media IDs
+        imdbId: result.imdb || result.imdbId || undefined,
+        tvdbId: result.tvdbId || undefined,
+        tvMazeId: result.tvMazeId || undefined,
+        tmdbId: result.tmdbId || undefined,
+        rageId: result.rageId || undefined,
+
+        // Content type
+        type: result.type || undefined,
+
+        // Magnet and torrent info
+        magnetUrl: result.magnetUrl || undefined,
+        infoHash: result.infoHash || undefined,
+
+        // Media URLs
+        coverUrl: result.coverUrl || undefined,
+        bannerUrl: result.bannerUrl || undefined,
+
+        // Tracker requirements
+        minimumRatio,
+        minimumSeedTime,
       };
     });
   }
@@ -400,8 +533,8 @@ export class TorznabService {
     return {
       searching: {
         search: { available: true, supportedParams: ['q'] },
-        tvSearch: { available: true, supportedParams: ['q', 'season', 'ep'] },
-        movieSearch: { available: true, supportedParams: ['q', 'imdbid'] },
+        tvSearch: { available: true, supportedParams: ['q'] },
+        movieSearch: { available: true, supportedParams: ['q'] },
       },
       categories: [
         {
@@ -477,6 +610,71 @@ export class TorznabService {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&apos;');
+  }
+
+  /**
+   * Parse category string to array of category IDs
+   * Examples: "5000,5040" -> [5000, 5040], "5000" -> [5000]
+   */
+  public parseCategoryString(categoryString: string | undefined): number[] | undefined {
+    if (!categoryString) {
+      return undefined;
+    }
+
+    const categories = categoryString
+      .split(',')
+      .map((cat) => parseInt(cat.trim(), 10))
+      .filter((cat) => !isNaN(cat));
+
+    return categories.length > 0 ? categories : undefined;
+  }
+
+  /**
+   * Check if an item's category matches any of the requested categories
+   * Supports parent category matching (e.g., 5000 matches 5030, 5040, etc.)
+   */
+  public categoryMatches(itemCategory: number, requestedCategories: number[]): boolean {
+    for (const reqCat of requestedCategories) {
+      // Exact match
+      if (itemCategory === reqCat) {
+        return true;
+      }
+
+      // Parent category match - if requesting parent (e.g., 5000), match children (5030, 5040, etc.)
+      // Parent categories are: 2000, 3000, 4000, 5000, 6000, 7000, 8000
+      const isParentCategory = reqCat % 1000 === 0;
+      if (isParentCategory) {
+        const itemParent = Math.floor(itemCategory / 1000) * 1000;
+        if (itemParent === reqCat) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Filter Torznab items by requested categories
+   * If no categories specified, returns all items
+   */
+  public filterItemsByCategories(
+    items: TorznabItem[],
+    requestedCategories: number[] | undefined
+  ): TorznabItem[] {
+    if (!requestedCategories || requestedCategories.length === 0) {
+      return items;
+    }
+
+    return items.filter((item) => {
+      if (item.category === undefined) {
+        // Items without a category are included if OTHER category (8000) is requested
+        return requestedCategories.includes(TORZNAB_CATEGORIES.OTHER) ||
+               requestedCategories.includes(TORZNAB_CATEGORIES.OTHER_MISC);
+      }
+
+      return this.categoryMatches(item.category, requestedCategories);
+    });
   }
 }
 

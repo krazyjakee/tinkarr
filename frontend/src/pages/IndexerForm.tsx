@@ -26,6 +26,7 @@ export const IndexerForm = () => {
   const [resultMappingCode, setResultMappingCode] = useState('');
   const [mappingType, setMappingType] = useState<'json' | 'code'>('json');
   const [searchParamsText, setSearchParamsText] = useState('');
+  const [rssParamsText, setRssParamsText] = useState('');
   const [error, setError] = useState('');
   const [autoConfigureLoading, setAutoConfigureLoading] = useState(false);
   const [autoConfigureMessage, setAutoConfigureMessage] = useState('');
@@ -86,6 +87,14 @@ export const IndexerForm = () => {
           : indexer.searchParams;
         setSearchParamsText(JSON.stringify(params, null, 2));
       }
+
+      if (indexer.rssParams) {
+        // If it's a string, parse it first to format properly
+        const params = typeof indexer.rssParams === 'string'
+          ? JSON.parse(indexer.rssParams)
+          : indexer.rssParams;
+        setRssParamsText(JSON.stringify(params, null, 2));
+      }
     }
   }, [indexer]);
 
@@ -117,16 +126,20 @@ export const IndexerForm = () => {
     e.preventDefault();
     setError('');
 
+    const data: CreateIndexerRequest = { ...formData };
+
+    // Set mapping type
+    data.resultMappingType = mappingType;
+
     try {
-      const data: CreateIndexerRequest = { ...formData };
-
-      // Set mapping type
-      data.resultMappingType = mappingType;
-
       // Handle mapping based on type
       if (mappingType === 'json') {
         if (resultMappingText.trim()) {
-          data.resultMapping = JSON.parse(resultMappingText);
+          try {
+            data.resultMapping = JSON.parse(resultMappingText);
+          } catch (e) {
+            throw new Error('Invalid JSON in Result Mapping');
+          }
         }
         data.resultMappingCode = undefined;
       } else {
@@ -136,7 +149,19 @@ export const IndexerForm = () => {
       }
 
       if (searchParamsText.trim()) {
-        data.searchParams = JSON.parse(searchParamsText);
+        try {
+          data.searchParams = JSON.parse(searchParamsText);
+        } catch (e) {
+          throw new Error('Invalid JSON in Search Parameters');
+        }
+      }
+
+      if (rssParamsText.trim()) {
+        try {
+          data.rssParams = JSON.parse(rssParamsText);
+        } catch (e) {
+          throw new Error('Invalid JSON in RSS Parameters');
+        }
       }
 
       if (isEdit) {
@@ -144,8 +169,8 @@ export const IndexerForm = () => {
       } else {
         createMutation.mutate(data);
       }
-    } catch (err) {
-      setError('Invalid JSON in result mapping or search params');
+    } catch (err: any) {
+      setError(err.message || 'Invalid form data');
     }
   };
 
@@ -439,6 +464,43 @@ export const IndexerForm = () => {
           </div>
 
           <div className="bg-white shadow rounded-lg p-6 space-y-6">
+            <h2 className="text-lg font-medium text-gray-900">RSS Configuration</h2>
+            <p className="text-sm text-gray-500">
+              Configure this section to enable RSS feeds and recent releases support.
+              This is used when no search query is provided.
+            </p>
+
+            <div>
+              <label htmlFor="rssUrl" className="block text-sm font-medium text-gray-700">
+                RSS URL
+              </label>
+              <input
+                type="url"
+                name="rssUrl"
+                id="rssUrl"
+                value={formData.rssUrl || ''}
+                onChange={handleInputChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="rssParams" className="block text-sm font-medium text-gray-700">
+                RSS Parameters (JSON)
+              </label>
+              <textarea
+                name="rssParams"
+                id="rssParams"
+                rows={3}
+                value={rssParamsText}
+                onChange={(e) => setRssParamsText(e.target.value)}
+                placeholder='{"cat": "1,2,3"}'
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="bg-white shadow rounded-lg p-6 space-y-6">
             <h2 className="text-lg font-medium text-gray-900">Result Parsing</h2>
 
             <div>
@@ -502,17 +564,77 @@ export const IndexerForm = () => {
                   placeholder={`{
   "title": ".title",
   "link": "a@href",
+  "magnetUrl": ".magnet@href",
   "size": ".size",
   "seeders": ".seeds",
   "leechers": ".leech",
   "category": ".category",
-  "pubDate": ".date"
+  "pubDate": ".date",
+  "description": ".description",
+  "comments": ".comments@href",
+  "imdb": ".imdb@data-imdb",
+  "tvdbId": ".tvdb@data-tvdb",
+  "rageId": ".rage@data-rage",
+  "type": ".type",
+  "infoHash": ".hash@data-hash",
+  "coverUrl": ".cover@src",
+  "bannerUrl": ".banner@src",
+  "minimumRatio": ".ratio",
+  "minimumSeedTime": ".seedtime",
+  "grabs": ".grabs"
 }`}
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
                 />
-                <p className="mt-1 text-sm text-gray-500">
-                  Map result fields to CSS selectors. Use @ for attributes (e.g., "a@href")
-                </p>
+                <div className="mt-2 text-sm text-gray-600">
+                  <p className="font-medium">Map result fields to CSS selectors. Use @ for attributes (e.g., "a@href")</p>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer font-medium text-indigo-600 hover:text-indigo-800">
+                      Available fields (click to expand)
+                    </summary>
+                    <div className="mt-2 ml-4 space-y-1 text-xs">
+                      <p><strong>Required:</strong></p>
+                      <ul className="list-disc list-inside ml-2 space-y-0.5">
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">title</code> - Torrent title</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">link</code> - Download link or torrent file URL</li>
+                      </ul>
+                      <p className="mt-2"><strong>Common:</strong></p>
+                      <ul className="list-disc list-inside ml-2 space-y-0.5">
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">magnetUrl</code> - Magnet link</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">size</code> - File size (e.g., "1.5 GB")</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">seeders</code> - Number of seeders</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">leechers</code> - Number of leechers</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">category</code> - Content category</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">pubDate</code> - Publication date</li>
+                      </ul>
+                      <p className="mt-2"><strong>Optional:</strong></p>
+                      <ul className="list-disc list-inside ml-2 space-y-0.5">
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">description</code> - Torrent description</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">comments</code> - Comments page URL</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">grabs</code> - Number of downloads</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">infoHash</code> - Torrent info hash</li>
+                      </ul>
+                      <p className="mt-2"><strong>Media IDs:</strong></p>
+                      <ul className="list-disc list-inside ml-2 space-y-0.5">
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">imdb</code> / <code className="bg-gray-100 px-1 py-0.5 rounded">imdbId</code> - IMDB ID</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">tvdbId</code> - TVDB ID</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">tmdbId</code> - TMDB ID</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">rageId</code> - TVRage ID</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">tvMazeId</code> - TVMaze ID</li>
+                      </ul>
+                      <p className="mt-2"><strong>Media URLs:</strong></p>
+                      <ul className="list-disc list-inside ml-2 space-y-0.5">
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">coverUrl</code> - Poster/cover image URL</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">bannerUrl</code> - Banner image URL</li>
+                      </ul>
+                      <p className="mt-2"><strong>Tracker Requirements:</strong></p>
+                      <ul className="list-disc list-inside ml-2 space-y-0.5">
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">type</code> - Content type (movie, series, music, book)</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">minimumRatio</code> - Required ratio (e.g., "1.0")</li>
+                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">minimumSeedTime</code> - Min seed time in seconds (e.g., "172800" for 48 hours)</li>
+                      </ul>
+                    </div>
+                  </details>
+                </div>
               </div>
             )}
 
@@ -549,11 +671,23 @@ export const IndexerForm = () => {
 {`return items.map(item => ({
   title: item.find('.title')?.text || '',
   link: item.find('a')?.attr('href') || '',
+  magnetUrl: item.find('.magnet')?.attr('href') || '',
   size: item.find('.size')?.text || '',
   seeders: item.find('.seeders')?.text || '0',
   leechers: item.find('.leechers')?.text || '0',
   category: item.find('.category')?.text || '',
-  pubDate: item.find('.date')?.text || ''
+  pubDate: item.find('.date')?.text || '',
+  description: item.find('.description')?.text || '',
+  comments: item.find('.comments')?.attr('href') || '',
+  imdb: item.find('.imdb')?.attr('data-imdb') || '',
+  tvdbId: item.find('.tvdb')?.attr('data-tvdb') || '',
+  type: item.find('.type')?.text || 'series',
+  infoHash: item.find('.hash')?.attr('data-hash') || '',
+  coverUrl: item.find('.cover')?.attr('src') || '',
+  bannerUrl: item.find('.banner')?.attr('src') || '',
+  minimumRatio: item.find('.ratio')?.text || '1.0',
+  minimumSeedTime: item.find('.seedtime')?.text || '172800',
+  grabs: item.find('.grabs')?.text || '0'
 }));`}
                   </pre>
                 </div>

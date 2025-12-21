@@ -28,6 +28,8 @@ export interface IndexerConfig {
   searchMethod: string | null;
   searchParams: any;
   searchQueryParam: string | null;
+  rssUrl?: string | null;
+  rssParams?: any;
   resultSelector: string | null;
   resultMapping: any;
   resultMappingType?: string | null;
@@ -38,6 +40,7 @@ export interface ScraperOptions {
   timeout?: number;
   useFlaresolverr?: boolean;
   forceFlaresolverr?: boolean;
+  skipCache?: boolean;
 }
 
 export interface ScraperResult {
@@ -73,10 +76,19 @@ export class ScraperService {
     query?: string,
     options: ScraperOptions = {}
   ): Promise<ScraperResult> {
-    // Build the search URL
-    const searchUrl = this.buildSearchUrl(indexer, query);
+    // Determine the target URL
+    // If query is empty and RSS URL is configured, use RSS URL
+    // Otherwise use search URL
+    let targetUrl: string | null;
+    let method = indexer.searchMethod || 'GET'; // Default to search method, might need RSS method in future
 
-    if (!searchUrl) {
+    if (!query && indexer.rssUrl) {
+      targetUrl = this.buildRssUrl(indexer);
+    } else {
+      targetUrl = this.buildSearchUrl(indexer, query);
+    }
+
+    if (!targetUrl) {
       return {
         success: false,
         data: [],
@@ -87,10 +99,10 @@ export class ScraperService {
       };
     }
 
-    // Check cache first
-    if (this.cacheEnabled && query) {
+    // Check cache first (skip if skipCache option is set)
+    if (this.cacheEnabled && query && !options.skipCache) {
       const cacheKey = `indexer:${indexer.id}:query:${query}`;
-      const cached = await this.cacheService.get(searchUrl, { query, indexerId: indexer.id });
+      const cached = await this.cacheService.get(targetUrl, { query, indexerId: indexer.id });
 
       if (cached) {
         try {
@@ -103,22 +115,24 @@ export class ScraperService {
       }
     }
 
-    // Determine if we should use Flaresolverr
-    const shouldUseFlaresolverr =
-      options.forceFlaresolverr ||
-      indexer.requiresFlaresolverr ||
-      (options.useFlaresolverr && await this.flaresolverrService.isEnabled());
+    // Check if we should prioritize Flaresolverr
+    const requiresFlaresolverr = options.forceFlaresolverr || indexer.requiresFlaresolverr;
+    const flaresolverrEnabled = await this.flaresolverrService.isEnabled();
 
     let html: string;
     let statusCode: number;
     let usedFlaresolverr = false;
-    let actualUrl = searchUrl;
+    let actualUrl = targetUrl;
 
     try {
-      if (shouldUseFlaresolverr && await this.flaresolverrService.isEnabled()) {
-        // Try with Flaresolverr first
+      if (requiresFlaresolverr) {
+        // When Flaresolverr is required, ALWAYS use it first
+        if (!flaresolverrEnabled) {
+          throw new Error('Flaresolverr is required for this indexer but is not enabled');
+        }
+
         try {
-          const result = await this.fetchWithFlaresolverr(searchUrl, indexer.searchMethod || 'GET');
+          const result = await this.fetchWithFlaresolverr(targetUrl, method);
           html = result.html;
           statusCode = result.statusCode;
           actualUrl = result.url;
@@ -127,7 +141,25 @@ export class ScraperService {
           console.warn(`Flaresolverr failed, falling back to direct request: ${flaresolverrError.message}`);
 
           // Fallback to direct request
-          const result = await this.fetchDirect(searchUrl, indexer.searchMethod || 'GET', options.timeout);
+          const result = await this.fetchDirect(targetUrl, method, options.timeout);
+          html = result.html;
+          statusCode = result.statusCode;
+          actualUrl = result.url;
+          usedFlaresolverr = false;
+        }
+      } else if (options.useFlaresolverr && flaresolverrEnabled) {
+        // Flaresolverr is preferred but not required - use it first
+        try {
+          const result = await this.fetchWithFlaresolverr(targetUrl, method);
+          html = result.html;
+          statusCode = result.statusCode;
+          actualUrl = result.url;
+          usedFlaresolverr = true;
+        } catch (flaresolverrError: any) {
+          console.warn(`Flaresolverr failed, falling back to direct request: ${flaresolverrError.message}`);
+
+          // Fallback to direct request
+          const result = await this.fetchDirect(targetUrl, method, options.timeout);
           html = result.html;
           statusCode = result.statusCode;
           actualUrl = result.url;
@@ -136,16 +168,16 @@ export class ScraperService {
       } else {
         // Try direct request first
         try {
-          const result = await this.fetchDirect(searchUrl, indexer.searchMethod || 'GET', options.timeout);
+          const result = await this.fetchDirect(targetUrl, method, options.timeout);
           html = result.html;
           statusCode = result.statusCode;
           actualUrl = result.url;
           usedFlaresolverr = false;
         } catch (directError: any) {
-          // If direct request fails and Flaresolverr is available, try it
-          if (await this.flaresolverrService.isEnabled()) {
+          // If direct request fails and Flaresolverr is available, try it as fallback
+          if (flaresolverrEnabled) {
             console.warn(`Direct request failed, trying Flaresolverr: ${directError.message}`);
-            const result = await this.fetchWithFlaresolverr(searchUrl, indexer.searchMethod || 'GET');
+            const result = await this.fetchWithFlaresolverr(targetUrl, method);
             html = result.html;
             statusCode = result.statusCode;
             actualUrl = result.url;
@@ -159,19 +191,24 @@ export class ScraperService {
       // Parse the results
       const parsedResults = await this.parseResults(html, indexer, actualUrl);
 
+      // Filter out results without titles
+      const filteredResults = parsedResults.filter(result => {
+        return result.title && result.title.trim().length > 0;
+      });
+
       const result: ScraperResult = {
         success: true,
-        data: parsedResults,
+        data: filteredResults,
         html,
         usedFlaresolverr,
         url: actualUrl,
         statusCode,
       };
 
-      // Cache the result
-      if (this.cacheEnabled && query) {
+      // Cache the result (skip if skipCache option is set)
+      if (this.cacheEnabled && query && !options.skipCache) {
         await this.cacheService.set(
-          searchUrl,
+          targetUrl,
           JSON.stringify(result),
           { query, indexerId: indexer.id }
         );
@@ -278,6 +315,33 @@ export class ScraperService {
   }
 
   /**
+   * Build RSS URL from indexer config
+   */
+  private buildRssUrl(indexer: IndexerConfig): string | null {
+    if (!indexer.rssUrl) {
+      return null;
+    }
+
+    let url = indexer.rssUrl;
+    const urlObj = new URL(url);
+
+    // Add additional RSS parameters from config
+    if (indexer.rssParams) {
+      const params = typeof indexer.rssParams === 'string'
+        ? JSON.parse(indexer.rssParams)
+        : indexer.rssParams;
+
+      for (const [key, value] of Object.entries(params)) {
+        if (typeof value === 'string' || typeof value === 'number') {
+          urlObj.searchParams.set(key, String(value));
+        }
+      }
+    }
+
+    return urlObj.toString();
+  }
+
+  /**
    * Parse HTML results using indexer configuration
    */
   private async parseResults(html: string, indexer: IndexerConfig, baseUrl: string): Promise<ParsedResult[]> {
@@ -351,7 +415,8 @@ export class ScraperService {
     usedFlaresolverr?: boolean;
     statusCode?: number;
   }> {
-    const result = await this.scrape(indexer, query || 'test', options);
+    // Always skip cache for test requests to ensure fresh results
+    const result = await this.scrape(indexer, query || undefined, { ...options, skipCache: true });
 
     if (!result.success) {
       return {

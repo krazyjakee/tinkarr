@@ -15,6 +15,8 @@ CREATE TABLE `indexers` (
 	`rss_params` text,
 	`result_selector` text,
 	`result_mapping` text,
+	`result_mapping_type` text DEFAULT 'json',
+	`result_mapping_code` text,
 	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL
 );

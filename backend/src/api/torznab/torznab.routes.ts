@@ -15,6 +15,7 @@ async function validateApiKey(req: Request, res: Response, next: NextFunction) {
     const apiKey = req.query.apikey as string;
 
     if (!apiKey) {
+      res.set('Content-Type', 'application/xml');
       return res.status(401).send(generateErrorXml('No API key provided'));
     }
 
@@ -23,9 +24,11 @@ async function validateApiKey(req: Request, res: Response, next: NextFunction) {
       await authService.getUserByApiKey(apiKey);
       next();
     } catch (error) {
+      res.set('Content-Type', 'application/xml');
       return res.status(401).send(generateErrorXml('Invalid API key'));
     }
   } catch (error: any) {
+    res.set('Content-Type', 'application/xml');
     return res.status(500).send(generateErrorXml('Authentication error'));
   }
 }
@@ -59,6 +62,9 @@ router.get('/:indexerId', validateApiKey, async (req: Request, res: Response) =>
     const indexerId = parseInt(req.params.indexerId, 10);
     const queryType = (req.query.t as string) || 'search';
 
+    // Set response content type for all responses
+    res.set('Content-Type', 'application/xml');
+
     // Get indexer
     let indexer;
     try {
@@ -75,9 +81,6 @@ router.get('/:indexerId', validateApiKey, async (req: Request, res: Response) =>
         .status(503)
         .send(generateErrorXml(`Indexer ${indexer.title} is disabled`, 201));
     }
-
-    // Set response content type
-    res.set('Content-Type', 'application/xml');
 
     // Handle different query types
     switch (queryType) {
@@ -103,6 +106,7 @@ router.get('/:indexerId', validateApiKey, async (req: Request, res: Response) =>
     }
   } catch (error: any) {
     console.error('Torznab error:', error);
+    res.set('Content-Type', 'application/xml');
     return res.status(500).send(generateErrorXml(error.message || 'Internal server error'));
   }
 });
@@ -122,8 +126,10 @@ async function handleSearchRequest(indexer: any, req: Request, res: Response) {
   const query = (req.query.q as string) || '';
   const limit = parseInt((req.query.limit as string) || '100', 10);
   const offset = parseInt((req.query.offset as string) || '0', 10);
+  const categoryString = req.query.cat as string | undefined;
 
   // Execute search
+  // Pass undefined instead of empty string to trigger RSS feed logic
   const scraper = new ScraperService(settingsService);
   const result = await scraper.scrape(
     {
@@ -134,12 +140,16 @@ async function handleSearchRequest(indexer: any, req: Request, res: Response) {
       searchType: indexer.searchType,
       searchUrl: indexer.searchUrl,
       searchMethod: indexer.searchMethod,
-      searchParams: indexer.searchParams ? JSON.parse(indexer.searchParams) : null,
+      searchParams: indexer.searchParams,
       searchQueryParam: indexer.searchQueryParam,
+      rssUrl: indexer.rssUrl,
+      rssParams: indexer.rssParams,
       resultSelector: indexer.resultSelector,
-      resultMapping: indexer.resultMapping ? JSON.parse(indexer.resultMapping) : null,
+      resultMapping: indexer.resultMapping,
+      resultMappingType: indexer.resultMappingType,
+      resultMappingCode: indexer.resultMappingCode,
     },
-    query
+    query || undefined
   );
 
   if (!result.success) {
@@ -149,8 +159,12 @@ async function handleSearchRequest(indexer: any, req: Request, res: Response) {
   // Convert to Torznab format
   const torznabItems = torznabService.convertToTorznabItems(result.data);
 
+  // Apply category filtering
+  const requestedCategories = torznabService.parseCategoryString(categoryString);
+  const filteredItems = torznabService.filterItemsByCategories(torznabItems, requestedCategories);
+
   // Apply pagination
-  const paginatedItems = torznabItems.slice(offset, offset + limit);
+  const paginatedItems = filteredItems.slice(offset, offset + limit);
 
   // Generate RSS XML
   const xml = torznabService.generateRssXml(indexer.title, paginatedItems);
@@ -167,6 +181,7 @@ async function handleTvSearchRequest(indexer: any, req: Request, res: Response) 
   const episode = req.query.ep as string;
   const limit = parseInt((req.query.limit as string) || '100', 10);
   const offset = parseInt((req.query.offset as string) || '0', 10);
+  const categoryString = req.query.cat as string | undefined;
 
   // Build TV-specific query
   let searchQuery = query;
@@ -177,6 +192,7 @@ async function handleTvSearchRequest(indexer: any, req: Request, res: Response) 
   }
 
   // Execute search
+  // Pass undefined instead of empty string to trigger RSS feed logic
   const scraper = new ScraperService(settingsService);
   const result = await scraper.scrape(
     {
@@ -187,12 +203,16 @@ async function handleTvSearchRequest(indexer: any, req: Request, res: Response) 
       searchType: indexer.searchType,
       searchUrl: indexer.searchUrl,
       searchMethod: indexer.searchMethod,
-      searchParams: indexer.searchParams ? JSON.parse(indexer.searchParams) : null,
+      searchParams: indexer.searchParams,
       searchQueryParam: indexer.searchQueryParam,
+      rssUrl: indexer.rssUrl,
+      rssParams: indexer.rssParams,
       resultSelector: indexer.resultSelector,
-      resultMapping: indexer.resultMapping ? JSON.parse(indexer.resultMapping) : null,
+      resultMapping: indexer.resultMapping,
+      resultMappingType: indexer.resultMappingType,
+      resultMappingCode: indexer.resultMappingCode,
     },
-    searchQuery
+    searchQuery || undefined
   );
 
   if (!result.success) {
@@ -202,8 +222,12 @@ async function handleTvSearchRequest(indexer: any, req: Request, res: Response) 
   // Convert to Torznab format with TV category
   const torznabItems = torznabService.convertToTorznabItems(result.data, 5000); // TV category
 
+  // Apply category filtering
+  const requestedCategories = torznabService.parseCategoryString(categoryString);
+  const filteredItems = torznabService.filterItemsByCategories(torznabItems, requestedCategories);
+
   // Apply pagination
-  const paginatedItems = torznabItems.slice(offset, offset + limit);
+  const paginatedItems = filteredItems.slice(offset, offset + limit);
 
   // Generate RSS XML
   const xml = torznabService.generateRssXml(indexer.title, paginatedItems);
@@ -219,6 +243,7 @@ async function handleMovieSearchRequest(indexer: any, req: Request, res: Respons
   const imdbId = req.query.imdbid as string;
   const limit = parseInt((req.query.limit as string) || '100', 10);
   const offset = parseInt((req.query.offset as string) || '0', 10);
+  const categoryString = req.query.cat as string | undefined;
 
   // Build movie-specific query
   let searchQuery = query;
@@ -227,6 +252,7 @@ async function handleMovieSearchRequest(indexer: any, req: Request, res: Respons
   }
 
   // Execute search
+  // Pass undefined instead of empty string to trigger RSS feed logic
   const scraper = new ScraperService(settingsService);
   const result = await scraper.scrape(
     {
@@ -237,12 +263,16 @@ async function handleMovieSearchRequest(indexer: any, req: Request, res: Respons
       searchType: indexer.searchType,
       searchUrl: indexer.searchUrl,
       searchMethod: indexer.searchMethod,
-      searchParams: indexer.searchParams ? JSON.parse(indexer.searchParams) : null,
+      searchParams: indexer.searchParams,
       searchQueryParam: indexer.searchQueryParam,
+      rssUrl: indexer.rssUrl,
+      rssParams: indexer.rssParams,
       resultSelector: indexer.resultSelector,
-      resultMapping: indexer.resultMapping ? JSON.parse(indexer.resultMapping) : null,
+      resultMapping: indexer.resultMapping,
+      resultMappingType: indexer.resultMappingType,
+      resultMappingCode: indexer.resultMappingCode,
     },
-    searchQuery
+    searchQuery || undefined
   );
 
   if (!result.success) {
@@ -252,8 +282,12 @@ async function handleMovieSearchRequest(indexer: any, req: Request, res: Respons
   // Convert to Torznab format with Movies category
   const torznabItems = torznabService.convertToTorznabItems(result.data, 2000); // Movies category
 
+  // Apply category filtering
+  const requestedCategories = torznabService.parseCategoryString(categoryString);
+  const filteredItems = torznabService.filterItemsByCategories(torznabItems, requestedCategories);
+
   // Apply pagination
-  const paginatedItems = torznabItems.slice(offset, offset + limit);
+  const paginatedItems = filteredItems.slice(offset, offset + limit);
 
   // Generate RSS XML
   const xml = torznabService.generateRssXml(indexer.title, paginatedItems);

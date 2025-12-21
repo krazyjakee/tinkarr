@@ -112,12 +112,13 @@ router.post('/:id/toggle', async (req: Request, res: Response) => {
 router.post('/:id/test', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
-    const query = req.body.query || 'test';
+    const query = req.body.query || undefined;
 
     // Get indexer from database
     const indexer = await indexerService.getById(id);
 
     // Convert to ScraperService format
+    // Include rssUrl and rssParams to support RSS feed testing
     const indexerConfig = {
       id: indexer.id,
       title: indexer.title,
@@ -128,6 +129,8 @@ router.post('/:id/test', async (req: Request, res: Response) => {
       searchMethod: indexer.searchMethod,
       searchParams: indexer.searchParams,
       searchQueryParam: indexer.searchQueryParam,
+      rssUrl: indexer.rssUrl,
+      rssParams: indexer.rssParams,
       resultSelector: indexer.resultSelector,
       resultMapping: indexer.resultMapping,
       resultMappingType: indexer.resultMappingType,
@@ -135,6 +138,7 @@ router.post('/:id/test', async (req: Request, res: Response) => {
     };
 
     // Test the indexer
+    // If query is empty or 'test-rss', the scraper will use rssUrl if available
     const result = await scraperService.testIndexer(indexerConfig, query, {
       useFlaresolverr: req.body.useFlaresolverr,
     });
