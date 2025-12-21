@@ -40,15 +40,26 @@ const db = drizzle(sqlite);
 
 function validateMigrationFiles(migrationsFolder: string): void {
   const journalPath = path.join(migrationsFolder, 'meta', '_journal.json');
+  const absoluteMigrationsPath = path.resolve(migrationsFolder);
 
   console.log(`Validating migration files in: ${migrationsFolder}`);
+  console.log(`Absolute path: ${absoluteMigrationsPath}`);
   console.log(`Checking journal at: ${journalPath}`);
+  console.log(`Current working directory: ${process.cwd()}`);
 
   // Check if migrations folder exists
   if (!fs.existsSync(migrationsFolder)) {
     console.error(`FATAL: Migrations folder not found: ${migrationsFolder}`);
     console.error(`This likely means migration files were not included in the build.`);
     process.exit(1);
+  }
+
+  // List all files in migrations folder for debugging
+  try {
+    const files = fs.readdirSync(migrationsFolder);
+    console.log(`Files in ${migrationsFolder}:`, files);
+  } catch (error) {
+    console.error(`Error reading migrations folder:`, error);
   }
 
   // Check if journal file exists
@@ -77,12 +88,19 @@ function validateMigrationFiles(migrationsFolder: string): void {
   for (const entry of entries) {
     const migrationFile = `${entry.tag}.sql`;
     const migrationPath = path.join(migrationsFolder, migrationFile);
+    const absoluteMigrationPath = path.resolve(migrationPath);
 
     if (!fs.existsSync(migrationPath)) {
       missingFiles.push(migrationFile);
       console.error(`  ✗ MISSING: ${migrationFile}`);
+      console.error(`    Expected at: ${absoluteMigrationPath}`);
     } else {
+      const stats = fs.statSync(migrationPath);
       console.log(`  ✓ Found: ${migrationFile}`);
+      console.log(`    Path: ${absoluteMigrationPath}`);
+      console.log(`    Size: ${stats.size} bytes`);
+      console.log(`    Permissions: ${stats.mode.toString(8)}`);
+      console.log(`    Type: ${stats.isFile() ? 'file' : stats.isSymbolicLink() ? 'symlink' : 'other'}`);
     }
   }
 

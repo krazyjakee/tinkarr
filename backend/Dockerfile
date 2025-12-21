@@ -31,6 +31,12 @@ RUN npm install
 # Copy backend source
 COPY backend .
 
+# Debug: List what files were copied
+RUN echo "=== Checking copied migration files ===" && \
+    ls -la src/db/migrations/ && \
+    echo "=== Migration SQL files ===" && \
+    ls -la src/db/migrations/*.sql 2>/dev/null || echo "No SQL files found!"
+
 # Validate migrations before building (prevents production failures)
 RUN npm run validate:migrations
 
@@ -62,6 +68,14 @@ COPY --from=backend-builder /app/backend/dist ./dist
 
 # Copy migrations from backend source
 COPY --from=backend-builder /app/backend/src/db/migrations ./migrations
+
+# Debug: Verify migrations were copied correctly
+RUN echo "=== Verifying migrations in production stage ===" && \
+    ls -la ./migrations/ && \
+    echo "=== Migration SQL files ===" && \
+    ls -la ./migrations/*.sql 2>/dev/null || echo "ERROR: No SQL files found in production!" && \
+    echo "=== Meta directory ===" && \
+    ls -la ./migrations/meta/ 2>/dev/null || echo "No meta directory"
 
 # Copy built frontend from frontend-builder
 COPY --from=frontend-builder /app/frontend/dist ./public

@@ -55,8 +55,16 @@ for (const entry of entries) {
     missingFiles.push(migrationFile);
     console.error(`  ❌ MISSING: ${migrationFile}`);
   } else {
+    const stats = fs.statSync(migrationPath);
+    const mode = stats.mode & parseInt('777', 8);
     foundFiles.push(migrationFile);
     console.log(`  ✓ Found: ${migrationFile}`);
+
+    // Warn about restrictive permissions
+    if (mode < parseInt('644', 8)) {
+      console.warn(`    ⚠️  WARNING: Restrictive permissions (${mode.toString(8)}) - should be 644 or higher`);
+      console.warn(`    Run: chmod 644 ${migrationPath}`);
+    }
   }
 }
 
