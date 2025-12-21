@@ -50,6 +50,23 @@ export class FlaresolverrService {
   }
 
   /**
+   * Normalize Flaresolverr URL by ensuring it ends with /v1
+   */
+  private normalizeUrl(url: string | null): string | null {
+    if (!url) return null;
+
+    // Remove trailing slashes
+    let normalized = url.replace(/\/+$/, '');
+
+    // Append /v1 if not already present
+    if (!normalized.endsWith('/v1')) {
+      normalized += '/v1';
+    }
+
+    return normalized;
+  }
+
+  /**
    * Load Flaresolverr settings from database
    */
   private async loadSettings(): Promise<void> {
@@ -57,7 +74,7 @@ export class FlaresolverrService {
       const urlSetting = await this.settingsService.get('flaresolverr_url');
       const enabledSetting = await this.settingsService.get('flaresolverr_enabled');
 
-      this.flaresolverrUrl = urlSetting || null;
+      this.flaresolverrUrl = this.normalizeUrl(urlSetting);
       this.enabled = enabledSetting === 'true' || enabledSetting === '1';
     } catch (error) {
       console.error('Failed to load Flaresolverr settings:', error);
@@ -87,7 +104,7 @@ export class FlaresolverrService {
   public async testConnection(urlOverride?: string): Promise<{ success: boolean; message: string; version?: string }> {
     await this.loadSettings();
 
-    const testUrl = urlOverride || this.flaresolverrUrl;
+    const testUrl = this.normalizeUrl(urlOverride || this.flaresolverrUrl);
 
     if (!testUrl) {
       return {

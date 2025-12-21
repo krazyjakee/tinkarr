@@ -7,7 +7,9 @@ import { Dashboard } from './pages/Dashboard';
 import { Indexers } from './pages/Indexers';
 import { IndexerForm } from './pages/IndexerForm';
 import { IndexerTest } from './pages/IndexerTest';
+import { IndexerSetup } from './pages/IndexerSetup';
 import { Settings } from './pages/Settings';
+import { Users } from './pages/Users';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,10 +80,26 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/indexers/:id/setup"
+        element={
+          <ProtectedRoute>
+            <IndexerSetup />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/settings"
         element={
           <ProtectedRoute>
             <Settings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/users"
+        element={
+          <ProtectedRoute>
+            <Users />
           </ProtectedRoute>
         }
       />

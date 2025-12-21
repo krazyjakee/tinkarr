@@ -37,6 +37,10 @@ export const IndexerForm = () => {
   });
 
   useEffect(() => {
+    document.title = isEdit ? 'Edit Indexer - Tinkarr' : 'New Indexer - Tinkarr';
+  }, [isEdit]);
+
+  useEffect(() => {
     if (indexer) {
       setFormData({
         title: indexer.title,

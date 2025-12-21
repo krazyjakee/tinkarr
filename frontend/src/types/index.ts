@@ -2,6 +2,7 @@ export interface User {
   id: number;
   username: string;
   apiKey: string;
+  isAdmin: boolean;
   createdAt: string;
   updatedAt: string;
 }

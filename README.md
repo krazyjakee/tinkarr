@@ -167,7 +167,7 @@ Test the production build locally:
 
 1. **Login** (default credentials):
    - Username: `admin`
-   - Password: Set in seed script
+   - Password: `admin123`
 
 2. **Create an indexer** via API or upcoming web UI
 

@@ -201,6 +201,46 @@ class ApiClient {
     );
     return data;
   }
+
+  // User management endpoints
+  async getAllUsers(): Promise<User[]> {
+    const { data } = await this.client.get<User[]>('/auth/users');
+    return data;
+  }
+
+  async getUserById(id: number): Promise<User> {
+    const { data } = await this.client.get<User>(`/auth/users/${id}`);
+    return data;
+  }
+
+  async deleteUser(id: number): Promise<{ message: string }> {
+    const { data } = await this.client.delete<{ message: string }>(
+      `/auth/users/${id}`
+    );
+    return data;
+  }
+
+  async resetUserPassword(
+    id: number,
+    newPassword: string
+  ): Promise<{ message: string }> {
+    const { data } = await this.client.post<{ message: string }>(
+      `/auth/users/${id}/reset-password`,
+      { newPassword }
+    );
+    return data;
+  }
+
+  async changePassword(
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ message: string }> {
+    const { data } = await this.client.post<{ message: string }>(
+      '/auth/change-password',
+      { currentPassword, newPassword }
+    );
+    return data;
+  }
 }
 
 export const apiClient = new ApiClient();

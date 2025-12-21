@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { Layout } from '../components/common/Layout';
 
 export const IndexerTest = () => {
+  useEffect(() => {
+    document.title = 'Test Indexer - Tinkarr';
+  }, []);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');

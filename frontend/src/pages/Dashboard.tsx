@@ -1,9 +1,13 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { Layout } from '../components/common/Layout';
 
 export const Dashboard = () => {
+  useEffect(() => {
+    document.title = 'Dashboard - Tinkarr';
+  }, []);
   const { data: indexers, isLoading } = useQuery({
     queryKey: ['indexers'],
     queryFn: () => apiClient.getIndexers(),

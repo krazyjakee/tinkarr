@@ -38,6 +38,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 >
                   Indexers
                 </Link>
+                {user?.isAdmin && (
+                  <Link
+                    to="/users"
+                    className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 hover:text-gray-700"
+                  >
+                    Users
+                  </Link>
+                )}
                 <Link
                   to="/settings"
                   className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 hover:text-gray-700"

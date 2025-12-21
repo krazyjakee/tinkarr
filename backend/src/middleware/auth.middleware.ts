@@ -53,3 +53,21 @@ export async function authenticateApiKey(req: Request, res: Response, next: Next
     return res.status(401).json({ error: 'Invalid API key' });
   }
 }
+
+export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  try {
+    const user = await authService.getUserById(req.user.userId);
+
+    if (!user.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    next();
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to verify admin status' });
+  }
+}

@@ -7,13 +7,20 @@ import { useAuth } from '../contexts/AuthContext';
 export const Settings = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const [flaresolverrUrl, setFlaresolverrUrl] = useState('http://localhost:8191/v1');
+  const [flaresolverrUrl, setFlaresolverrUrl] = useState('http://localhost:8191');
   const [flaresolverrEnabled, setFlaresolverrEnabled] = useState(false);
   const [maxResults, setMaxResults] = useState('100');
   const [cacheTtl, setCacheTtl] = useState('600');
   const [globalTimeout, setGlobalTimeout] = useState('30000');
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  useEffect(() => {
+    document.title = 'Settings - Tinkarr';
+  }, []);
 
   const { data: settings } = useQuery({
     queryKey: ['settings'],
@@ -102,6 +109,23 @@ export const Settings = () => {
     },
   });
 
+  const changePasswordMutation = useMutation({
+    mutationFn: ({ current, newPass }: { current: string; newPass: string }) =>
+      apiClient.changePassword(current, newPass),
+    onSuccess: () => {
+      setSuccess('Password changed successfully');
+      setError('');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setSuccess(''), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message || 'Failed to change password');
+      setSuccess('');
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateMutation.mutate({
@@ -127,6 +151,27 @@ export const Settings = () => {
     }
   };
 
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setError('All password fields are required');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setError('New password must be at least 6 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('New passwords do not match');
+      return;
+    }
+
+    changePasswordMutation.mutate({ current: currentPassword, newPass: newPassword });
+  };
+
   return (
     <Layout>
       <div className="px-4 py-6 sm:px-0">
@@ -144,8 +189,62 @@ export const Settings = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-6">
           <div className="bg-white shadow rounded-lg p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">
+              Account Security
+            </h2>
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  Minimum 6 characters
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={changePasswordMutation.isPending}
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400"
+                >
+                  {changePasswordMutation.isPending ? 'Changing...' : 'Change Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="bg-white shadow rounded-lg p-6">
             <h2 className="text-lg font-medium text-gray-900 mb-4">
               API Configuration
             </h2>
@@ -202,8 +301,12 @@ export const Settings = () => {
                   type="url"
                   value={flaresolverrUrl}
                   onChange={(e) => setFlaresolverrUrl(e.target.value)}
+                  placeholder="http://localhost:8191"
                   className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 />
+                <p className="mt-1 text-sm text-gray-500">
+                  The /v1 endpoint path will be automatically appended
+                </p>
               </div>
 
               <button
@@ -276,7 +379,8 @@ export const Settings = () => {
               {updateMutation.isPending ? 'Saving...' : 'Save Settings'}
             </button>
           </div>
-        </form>
+          </form>
+        </div>
       </div>
     </Layout>
   );

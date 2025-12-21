@@ -25,6 +25,7 @@ async function seed() {
         username: 'admin',
         passwordHash,
         apiKey,
+        isAdmin: true,
       });
 
       console.log('✓ Created admin user');

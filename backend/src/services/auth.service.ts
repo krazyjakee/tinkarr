@@ -15,6 +15,7 @@ export interface AuthResponse {
     id: number;
     username: string;
     apiKey: string;
+    isAdmin: boolean;
   };
 }
 
@@ -50,6 +51,7 @@ export class AuthService {
         id: user.id,
         username: user.username,
         apiKey: user.apiKey,
+        isAdmin: user.isAdmin,
       },
     };
   }
@@ -75,6 +77,7 @@ export class AuthService {
         username,
         passwordHash,
         apiKey,
+        isAdmin: false,
       })
       .returning();
 
@@ -92,6 +95,7 @@ export class AuthService {
         id: newUser.id,
         username: newUser.username,
         apiKey: newUser.apiKey,
+        isAdmin: newUser.isAdmin,
       },
     };
   }
@@ -107,6 +111,7 @@ export class AuthService {
       id: user.id,
       username: user.username,
       apiKey: user.apiKey,
+      isAdmin: user.isAdmin,
       createdAt: user.createdAt,
     };
   }
@@ -122,6 +127,7 @@ export class AuthService {
       id: user.id,
       username: user.username,
       apiKey: user.apiKey,
+      isAdmin: user.isAdmin,
     };
   }
 
@@ -131,6 +137,87 @@ export class AuthService {
     await db.update(users).set({ apiKey: newApiKey }).where(eq(users.id, userId));
 
     return newApiKey;
+  }
+
+  async getAllUsers() {
+    const allUsers = await db.select().from(users);
+
+    return allUsers.map(user => ({
+      id: user.id,
+      username: user.username,
+      apiKey: user.apiKey,
+      isAdmin: user.isAdmin,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }));
+  }
+
+  async deleteUser(userId: number) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (user.isAdmin) {
+      throw new Error('Cannot delete admin user');
+    }
+
+    await db.delete(users).where(eq(users.id, userId));
+
+    return { message: 'User deleted successfully' };
+  }
+
+  async resetUserPassword(userId: number, newPassword: string) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await db.update(users).set({ passwordHash, updatedAt: new Date().toISOString() }).where(eq(users.id, userId));
+
+    return { message: 'Password reset successfully' };
+  }
+
+  async changePassword(userId: number, currentPassword: string, newPassword: string) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash);
+
+    if (!isValidPassword) {
+      throw new Error('Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await db.update(users).set({ passwordHash, updatedAt: new Date().toISOString() }).where(eq(users.id, userId));
+
+    return { message: 'Password changed successfully' };
+  }
+
+  async getUserByUsername(username: string) {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    return {
+      id: user.id,
+      username: user.username,
+      apiKey: user.apiKey,
+      isAdmin: user.isAdmin,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 }
 

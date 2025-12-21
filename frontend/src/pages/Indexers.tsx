@@ -1,9 +1,13 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { Layout } from '../components/common/Layout';
 
 export const Indexers = () => {
+  useEffect(() => {
+    document.title = 'Indexers - Tinkarr';
+  }, []);
   const queryClient = useQueryClient();
 
   const { data: indexers, isLoading } = useQuery({
@@ -106,6 +110,12 @@ export const Indexers = () => {
                       >
                         {indexer.enabled ? 'Enabled' : 'Disabled'}
                       </button>
+                      <Link
+                        to={`/indexers/${indexer.id}/setup`}
+                        className="px-3 py-1 text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                      >
+                        Setup
+                      </Link>
                       <Link
                         to={`/indexers/${indexer.id}/test`}
                         className="px-3 py-1 text-sm font-medium text-indigo-600 hover:text-indigo-500"

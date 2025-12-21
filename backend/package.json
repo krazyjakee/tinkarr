@@ -13,6 +13,7 @@
     "start": "node dist/server.js",
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/db/seed.ts",
+    "reset-password": "tsx src/db/reset-password.ts",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "test": "jest"
