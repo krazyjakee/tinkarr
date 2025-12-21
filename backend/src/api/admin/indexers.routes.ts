@@ -15,6 +15,18 @@ const healthService = new HealthService();
 
 const router = Router();
 
+// Helper function to build RSS context from request body
+function buildRssContext(body: any) {
+  return {
+    query: body.query,
+    season: body.season ? parseInt(body.season) : undefined,
+    episode: body.episode ? parseInt(body.episode) : undefined,
+    imdbId: body.imdbId,
+    tvdbId: body.tvdbId,
+    categories: body.categories,
+  };
+}
+
 // All routes require authentication
 router.use(authenticateJWT);
 
@@ -46,32 +58,6 @@ router.post('/', validateRequest(createIndexerSchema), async (req: Request, res:
     res.status(201).json(indexer);
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
-  }
-});
-
-// Auto-configure indexer from URL (standalone, doesn't require existing indexer)
-// IMPORTANT: This must be BEFORE /:id routes to avoid matching "auto-configure" as an ID
-router.post('/auto-configure', async (req: Request, res: Response) => {
-  try {
-    const { url, useFlaresolverr } = req.body;
-
-    if (!url) {
-      return res.status(400).json({ error: 'URL is required' });
-    }
-
-    // Validate URL format
-    try {
-      new URL(url);
-    } catch {
-      return res.status(400).json({ error: 'Invalid URL format' });
-    }
-
-    // Auto-configure from URL (use Flaresolverr if requested)
-    const result = await scraperService.autoConfigureFromUrl(url, useFlaresolverr || false);
-
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
   }
 });
 
@@ -108,11 +94,50 @@ router.post('/:id/toggle', async (req: Request, res: Response) => {
   }
 });
 
+// Preview indexer request (shows URL/params without actually scraping)
+router.post('/:id/preview', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const rssContext = buildRssContext(req.body);
+
+    // Get indexer from database
+    const indexer = await indexerService.getById(id);
+
+    // Convert to ScraperService format
+    const indexerConfig = {
+      id: indexer.id,
+      title: indexer.title,
+      url: indexer.url,
+      requiresFlaresolverr: indexer.requiresFlaresolverr,
+      searchType: indexer.searchType,
+      searchUrl: indexer.searchUrl,
+      searchMethod: indexer.searchMethod,
+      searchParams: indexer.searchParams,
+      searchQueryParam: indexer.searchQueryParam,
+      rssUrl: indexer.rssUrl,
+      rssParams: indexer.rssParams,
+      rssUrlGeneratorCode: indexer.rssUrlGeneratorCode,
+      rssMethod: indexer.rssMethod,
+      resultSelector: indexer.resultSelector,
+      resultMapping: indexer.resultMapping,
+      resultMappingType: indexer.resultMappingType,
+      resultMappingCode: indexer.resultMappingCode,
+    };
+
+    // Preview the request without actually scraping
+    const result = await scraperService.previewRequest(indexerConfig, req.body.query, rssContext);
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
 // Test indexer
 router.post('/:id/test', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
-    const query = req.body.query || undefined;
+    const rssContext = buildRssContext(req.body);
 
     // Get indexer from database
     const indexer = await indexerService.getById(id);
@@ -131,6 +156,8 @@ router.post('/:id/test', async (req: Request, res: Response) => {
       searchQueryParam: indexer.searchQueryParam,
       rssUrl: indexer.rssUrl,
       rssParams: indexer.rssParams,
+      rssUrlGeneratorCode: indexer.rssUrlGeneratorCode,
+      rssMethod: indexer.rssMethod,
       resultSelector: indexer.resultSelector,
       resultMapping: indexer.resultMapping,
       resultMappingType: indexer.resultMappingType,
@@ -138,10 +165,16 @@ router.post('/:id/test', async (req: Request, res: Response) => {
     };
 
     // Test the indexer
-    // If query is empty or 'test-rss', the scraper will use rssUrl if available
-    const result = await scraperService.testIndexer(indexerConfig, query, {
-      useFlaresolverr: req.body.useFlaresolverr,
-    });
+    // If query is empty, the scraper will use rssUrl if available
+    // RSS context parameters allow testing typical Sonarr/Radarr requests
+    const result = await scraperService.testIndexer(
+      indexerConfig,
+      req.body.query,
+      {
+        useFlaresolverr: req.body.useFlaresolverr,
+      },
+      rssContext
+    );
 
     res.json(result);
   } catch (error) {

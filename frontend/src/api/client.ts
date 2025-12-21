@@ -7,12 +7,11 @@ import type {
   Setting,
   TestIndexerRequest,
   TestIndexerResponse,
+  PreviewIndexerRequest,
+  PreviewIndexerResponse,
   AutoDetectResponse,
   FlaresolverrTestResponse,
-  AutoConfigureResponse,
 } from '../types';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -20,7 +19,7 @@ class ApiClient {
 
   constructor() {
     this.client = axios.create({
-      baseURL: `${API_BASE_URL}/api`,
+      baseURL: `/api`,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -149,20 +148,20 @@ class ApiClient {
     return data;
   }
 
-  async autoDetectIndexer(id: number): Promise<AutoDetectResponse> {
-    const { data } = await this.client.post<AutoDetectResponse>(
-      `/indexers/${id}/auto-detect`
+  async previewIndexer(
+    id: number,
+    request: PreviewIndexerRequest
+  ): Promise<PreviewIndexerResponse> {
+    const { data } = await this.client.post<PreviewIndexerResponse>(
+      `/indexers/${id}/preview`,
+      request
     );
     return data;
   }
 
-  async autoConfigureFromUrl(
-    url: string,
-    useFlaresolverr: boolean = false
-  ): Promise<AutoConfigureResponse> {
-    const { data } = await this.client.post<AutoConfigureResponse>(
-      '/indexers/auto-configure',
-      { url, useFlaresolverr }
+  async autoDetectIndexer(id: number): Promise<AutoDetectResponse> {
+    const { data } = await this.client.post<AutoDetectResponse>(
+      `/indexers/${id}/auto-detect`
     );
     return data;
   }

@@ -35,7 +35,9 @@ export const indexers = sqliteTable('indexers', {
   // RSS configuration
   rssUrl: text('rss_url'),
   rssType: text('rss_type', { enum: ['rest_api', 'static', 'none'] }),
-  rssParams: text('rss_params'), // JSON string
+  rssParams: text('rss_params'), // JSON string (static params)
+  rssUrlGeneratorCode: text('rss_url_generator_code'), // JavaScript code that returns params object
+  rssMethod: text('rss_method', { enum: ['GET', 'POST'] }).default('GET'),
 
   // Result parsing
   resultSelector: text('result_selector'),

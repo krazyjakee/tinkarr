@@ -3,6 +3,7 @@ import { FlaresolverrService } from './flaresolverr.service';
 import { ParserService, ParsedResult } from './parser.service';
 import { SettingsService } from './settings.service';
 import { CacheService } from './cache.service';
+import { CodeExecutorService, RssGeneratorContext } from './code-executor.service';
 
 /**
  * Custom error class that preserves HTTP status code
@@ -30,10 +31,21 @@ export interface IndexerConfig {
   searchQueryParam: string | null;
   rssUrl?: string | null;
   rssParams?: any;
+  rssUrlGeneratorCode?: string | null;
+  rssMethod?: string | null;
   resultSelector: string | null;
   resultMapping: any;
   resultMappingType?: string | null;
   resultMappingCode?: string | null;
+}
+
+export interface RssContext {
+  query?: string;
+  season?: number;
+  episode?: number;
+  imdbId?: string;
+  tvdbId?: string;
+  categories?: string[];
 }
 
 export interface ScraperOptions {
@@ -58,6 +70,7 @@ export class ScraperService {
   private flaresolverrService: FlaresolverrService;
   private parserService: ParserService;
   private cacheService: CacheService;
+  private codeExecutorService: CodeExecutorService;
   private cacheEnabled: boolean;
 
   constructor(settingsService: SettingsService, cacheEnabled: boolean = true) {
@@ -65,7 +78,47 @@ export class ScraperService {
     this.flaresolverrService = new FlaresolverrService(settingsService);
     this.parserService = new ParserService();
     this.cacheService = new CacheService();
+    this.codeExecutorService = new CodeExecutorService();
     this.cacheEnabled = cacheEnabled;
+  }
+
+  /**
+   * Execute fetch with primary method and optional fallback
+   */
+  private async executeFetch(
+    targetUrl: string,
+    method: string,
+    primaryMethod: 'flaresolverr' | 'direct',
+    allowFallback: boolean,
+    flaresolverrEnabled: boolean,
+    timeout?: number
+  ): Promise<{ html: string; statusCode: number; url: string; usedFlaresolverr: boolean }> {
+    if (primaryMethod === 'flaresolverr') {
+      try {
+        const result = await this.fetchWithFlaresolverr(targetUrl, method);
+        return { ...result, usedFlaresolverr: true };
+      } catch (error: any) {
+        if (allowFallback) {
+          console.warn(`Flaresolverr failed, falling back to direct request: ${error.message}`);
+          const result = await this.fetchDirect(targetUrl, method, timeout);
+          return { ...result, usedFlaresolverr: false };
+        }
+        throw error;
+      }
+    } else {
+      // Primary method is direct
+      try {
+        const result = await this.fetchDirect(targetUrl, method, timeout);
+        return { ...result, usedFlaresolverr: false };
+      } catch (error: any) {
+        if (allowFallback && flaresolverrEnabled) {
+          console.warn(`Direct request failed, trying Flaresolverr: ${error.message}`);
+          const result = await this.fetchWithFlaresolverr(targetUrl, method);
+          return { ...result, usedFlaresolverr: true };
+        }
+        throw error;
+      }
+    }
   }
 
   /**
@@ -74,18 +127,21 @@ export class ScraperService {
   public async scrape(
     indexer: IndexerConfig,
     query?: string,
-    options: ScraperOptions = {}
+    options: ScraperOptions = {},
+    rssContext?: RssContext
   ): Promise<ScraperResult> {
     // Determine the target URL
     // If query is empty and RSS URL is configured, use RSS URL
     // Otherwise use search URL
     let targetUrl: string | null;
-    let method = indexer.searchMethod || 'GET'; // Default to search method, might need RSS method in future
+    let method: string;
 
     if (!query && indexer.rssUrl) {
-      targetUrl = this.buildRssUrl(indexer);
+      targetUrl = await this.buildRssUrl(indexer, rssContext);
+      method = indexer.rssMethod || 'GET'; // Use RSS method or default to GET
     } else {
       targetUrl = this.buildSearchUrl(indexer, query);
+      method = indexer.searchMethod || 'GET'; // Use search method or default to GET
     }
 
     if (!targetUrl) {
@@ -125,68 +181,26 @@ export class ScraperService {
     let actualUrl = targetUrl;
 
     try {
+      let fetchResult;
+
       if (requiresFlaresolverr) {
         // When Flaresolverr is required, ALWAYS use it first
         if (!flaresolverrEnabled) {
           throw new Error('Flaresolverr is required for this indexer but is not enabled');
         }
-
-        try {
-          const result = await this.fetchWithFlaresolverr(targetUrl, method);
-          html = result.html;
-          statusCode = result.statusCode;
-          actualUrl = result.url;
-          usedFlaresolverr = true;
-        } catch (flaresolverrError: any) {
-          console.warn(`Flaresolverr failed, falling back to direct request: ${flaresolverrError.message}`);
-
-          // Fallback to direct request
-          const result = await this.fetchDirect(targetUrl, method, options.timeout);
-          html = result.html;
-          statusCode = result.statusCode;
-          actualUrl = result.url;
-          usedFlaresolverr = false;
-        }
+        fetchResult = await this.executeFetch(targetUrl, method, 'flaresolverr', true, flaresolverrEnabled, options.timeout);
       } else if (options.useFlaresolverr && flaresolverrEnabled) {
-        // Flaresolverr is preferred but not required - use it first
-        try {
-          const result = await this.fetchWithFlaresolverr(targetUrl, method);
-          html = result.html;
-          statusCode = result.statusCode;
-          actualUrl = result.url;
-          usedFlaresolverr = true;
-        } catch (flaresolverrError: any) {
-          console.warn(`Flaresolverr failed, falling back to direct request: ${flaresolverrError.message}`);
-
-          // Fallback to direct request
-          const result = await this.fetchDirect(targetUrl, method, options.timeout);
-          html = result.html;
-          statusCode = result.statusCode;
-          actualUrl = result.url;
-          usedFlaresolverr = false;
-        }
+        // Flaresolverr is preferred but not required - use it first with fallback
+        fetchResult = await this.executeFetch(targetUrl, method, 'flaresolverr', true, flaresolverrEnabled, options.timeout);
       } else {
-        // Try direct request first
-        try {
-          const result = await this.fetchDirect(targetUrl, method, options.timeout);
-          html = result.html;
-          statusCode = result.statusCode;
-          actualUrl = result.url;
-          usedFlaresolverr = false;
-        } catch (directError: any) {
-          // If direct request fails and Flaresolverr is available, try it as fallback
-          if (flaresolverrEnabled) {
-            console.warn(`Direct request failed, trying Flaresolverr: ${directError.message}`);
-            const result = await this.fetchWithFlaresolverr(targetUrl, method);
-            html = result.html;
-            statusCode = result.statusCode;
-            actualUrl = result.url;
-            usedFlaresolverr = true;
-          } else {
-            throw directError;
-          }
-        }
+        // Try direct request first with fallback to Flaresolverr if available
+        fetchResult = await this.executeFetch(targetUrl, method, 'direct', true, flaresolverrEnabled, options.timeout);
       }
+
+      html = fetchResult.html;
+      statusCode = fetchResult.statusCode;
+      actualUrl = fetchResult.url;
+      usedFlaresolverr = fetchResult.usedFlaresolverr;
 
       // Parse the results
       const parsedResults = await this.parseResults(html, indexer, actualUrl);
@@ -316,8 +330,9 @@ export class ScraperService {
 
   /**
    * Build RSS URL from indexer config
+   * Supports both static params (rssParams) and code-based generation (rssUrlGeneratorCode)
    */
-  private buildRssUrl(indexer: IndexerConfig): string | null {
+  private async buildRssUrl(indexer: IndexerConfig, rssContext?: RssContext): Promise<string | null> {
     if (!indexer.rssUrl) {
       return null;
     }
@@ -325,16 +340,45 @@ export class ScraperService {
     let url = indexer.rssUrl;
     const urlObj = new URL(url);
 
-    // Add additional RSS parameters from config
-    if (indexer.rssParams) {
-      const params = typeof indexer.rssParams === 'string'
+    let params: Record<string, string> = {};
+
+    // If code-based generator exists, use it
+    if (indexer.rssUrlGeneratorCode) {
+      try {
+        const generatorContext: RssGeneratorContext = {
+          baseUrl: indexer.url,
+          query: rssContext?.query,
+          season: rssContext?.season,
+          episode: rssContext?.episode,
+          imdbId: rssContext?.imdbId,
+          tvdbId: rssContext?.tvdbId,
+          categories: rssContext?.categories,
+        };
+
+        params = await this.codeExecutorService.executeRssParamsGenerator(
+          indexer.rssUrlGeneratorCode,
+          generatorContext
+        );
+      } catch (error: any) {
+        console.error(`RSS URL generator code failed for indexer ${indexer.title}:`, error.message);
+        // Fall back to static params if code fails
+        if (indexer.rssParams) {
+          params = typeof indexer.rssParams === 'string'
+            ? JSON.parse(indexer.rssParams)
+            : indexer.rssParams;
+        }
+      }
+    } else if (indexer.rssParams) {
+      // Use static params
+      params = typeof indexer.rssParams === 'string'
         ? JSON.parse(indexer.rssParams)
         : indexer.rssParams;
+    }
 
-      for (const [key, value] of Object.entries(params)) {
-        if (typeof value === 'string' || typeof value === 'number') {
-          urlObj.searchParams.set(key, String(value));
-        }
+    // Add parameters to URL
+    for (const [key, value] of Object.entries(params)) {
+      if (typeof value === 'string' || typeof value === 'number') {
+        urlObj.searchParams.set(key, String(value));
       }
     }
 
@@ -400,12 +444,91 @@ export class ScraperService {
   }
 
   /**
+   * Preview the request that would be made without actually scraping
+   */
+  public async previewRequest(
+    indexer: IndexerConfig,
+    query?: string,
+    rssContext?: RssContext
+  ): Promise<{
+    success: boolean;
+    message: string;
+    targetUrl: string;
+    method: string;
+    usedRss: boolean;
+    rssParams?: Record<string, string>;
+    searchParams?: Record<string, string>;
+  }> {
+    try {
+      // Determine if RSS will be used
+      const willUseRss = !query && !!indexer.rssUrl;
+
+      let targetUrl: string | null = null;
+      let method: string;
+      let params: Record<string, string> = {};
+
+      if (willUseRss) {
+        targetUrl = await this.buildRssUrl(indexer, rssContext);
+        method = indexer.rssMethod || 'GET';
+
+        // Extract the params for display
+        if (targetUrl) {
+          const url = new URL(targetUrl);
+          url.searchParams.forEach((value, key) => {
+            params[key] = value;
+          });
+        }
+      } else {
+        targetUrl = this.buildSearchUrl(indexer, query);
+        method = indexer.searchMethod || 'GET';
+
+        // Extract the params for display
+        if (targetUrl) {
+          const url = new URL(targetUrl);
+          url.searchParams.forEach((value, key) => {
+            params[key] = value;
+          });
+        }
+      }
+
+      if (!targetUrl) {
+        return {
+          success: false,
+          message: 'No URL configured for this indexer',
+          targetUrl: '',
+          method: 'GET',
+          usedRss: willUseRss,
+        };
+      }
+
+      return {
+        success: true,
+        message: willUseRss ? 'RSS feed URL generated' : 'Search URL generated',
+        targetUrl,
+        method,
+        usedRss: willUseRss,
+        rssParams: willUseRss ? params : undefined,
+        searchParams: !willUseRss ? params : undefined,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Failed to generate URL',
+        targetUrl: '',
+        method: 'GET',
+        usedRss: false,
+      };
+    }
+  }
+
+  /**
    * Test an indexer configuration
    */
   public async testIndexer(
     indexer: IndexerConfig,
     query?: string,
-    options: ScraperOptions = {}
+    options: ScraperOptions = {},
+    rssContext?: RssContext
   ): Promise<{
     success: boolean;
     message: string;
@@ -414,9 +537,39 @@ export class ScraperService {
     html?: string;
     usedFlaresolverr?: boolean;
     statusCode?: number;
+    targetUrl?: string;
+    usedRss?: boolean;
+    rssParams?: Record<string, string>;
   }> {
+    // Determine if RSS will be used
+    const willUseRss = !query && !!indexer.rssUrl;
+
+    // Build the target URL to show what will be fetched
+    let targetUrl: string | null = null;
+    let rssParams: Record<string, string> | undefined;
+
+    if (willUseRss) {
+      targetUrl = await this.buildRssUrl(indexer, rssContext);
+
+      // Extract the params for display
+      if (targetUrl) {
+        const url = new URL(targetUrl);
+        rssParams = {};
+        url.searchParams.forEach((value, key) => {
+          rssParams![key] = value;
+        });
+      }
+    } else {
+      targetUrl = this.buildSearchUrl(indexer, query);
+    }
+
     // Always skip cache for test requests to ensure fresh results
-    const result = await this.scrape(indexer, query || undefined, { ...options, skipCache: true });
+    const result = await this.scrape(
+      indexer,
+      query || undefined,
+      { ...options, skipCache: true },
+      rssContext
+    );
 
     if (!result.success) {
       return {
@@ -424,6 +577,9 @@ export class ScraperService {
         message: result.error || 'Unknown error',
         usedFlaresolverr: result.usedFlaresolverr,
         statusCode: result.statusCode,
+        targetUrl: targetUrl || undefined,
+        usedRss: willUseRss,
+        rssParams,
       };
     }
 
@@ -435,6 +591,9 @@ export class ScraperService {
       html: result.html,
       usedFlaresolverr: result.usedFlaresolverr,
       statusCode: result.statusCode,
+      targetUrl: targetUrl || undefined,
+      usedRss: willUseRss,
+      rssParams,
     };
   }
 

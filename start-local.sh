@@ -161,21 +161,6 @@ if [ "$START_FRONTEND" = true ]; then
 
     cd "$ORIGINAL_DIR/frontend"
 
-    # Check if .env file exists
-    print_info "Checking frontend environment configuration..."
-    if [ ! -f ".env" ]; then
-        print_warning ".env file not found. Creating from .env.example..."
-        if [ -f ".env.example" ]; then
-            cp .env.example .env
-            print_success "Frontend .env file created"
-        else
-            print_error ".env.example not found. Cannot create .env file."
-            exit 1
-        fi
-    else
-        print_success "Frontend .env file exists"
-    fi
-
     # Check if node_modules exists
     print_info "Checking frontend dependencies..."
     if [ ! -d "node_modules" ]; then

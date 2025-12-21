@@ -27,6 +27,8 @@ export interface Indexer {
   rssUrl?: string;
   rssType?: 'rest_api' | 'static' | 'none';
   rssParams?: Record<string, string>;
+  rssUrlGeneratorCode?: string;
+  rssMethod?: 'GET' | 'POST';
   resultSelector?: string;
   resultMapping?: Record<string, string>;
   resultMappingType?: 'json' | 'code';
@@ -49,6 +51,8 @@ export interface CreateIndexerRequest {
   rssUrl?: string;
   rssType?: 'rest_api' | 'static' | 'none';
   rssParams?: Record<string, string>;
+  rssUrlGeneratorCode?: string;
+  rssMethod?: 'GET' | 'POST';
   resultSelector?: string;
   resultMapping?: Record<string, string>;
   resultMappingType?: 'json' | 'code';
@@ -62,8 +66,14 @@ export interface Setting {
 }
 
 export interface TestIndexerRequest {
-  query: string;
+  query?: string;
   useFlaresolverr?: boolean;
+  // RSS Context parameters for testing typical Sonarr/Radarr requests
+  season?: number;
+  episode?: number;
+  imdbId?: string;
+  tvdbId?: string;
+  categories?: string[];
 }
 
 export interface TestIndexerResponse {
@@ -82,6 +92,30 @@ export interface TestIndexerResponse {
   html?: string;
   usedFlaresolverr: boolean;
   statusCode: number;
+  // New fields for RSS testing
+  targetUrl?: string;
+  usedRss?: boolean;
+  rssParams?: Record<string, string>;
+}
+
+export interface PreviewIndexerRequest {
+  query?: string;
+  // RSS Context parameters for testing typical Sonarr/Radarr requests
+  season?: number;
+  episode?: number;
+  imdbId?: string;
+  tvdbId?: string;
+  categories?: string[];
+}
+
+export interface PreviewIndexerResponse {
+  success: boolean;
+  message: string;
+  targetUrl: string;
+  method: string;
+  usedRss: boolean;
+  rssParams?: Record<string, string>;
+  searchParams?: Record<string, string>;
 }
 
 export interface AutoDetectResponse {
@@ -107,15 +141,3 @@ export interface FlaresolverrTestResponse {
   version?: string;
 }
 
-export interface AutoConfigureResponse {
-  success: boolean;
-  config?: {
-    searchUrl: string | null;
-    searchMethod: string | null;
-    searchQueryParam: string | null;
-    searchParams: Record<string, string>;
-    rssUrl: string | null;
-  };
-  error?: string;
-  message?: string;
-}

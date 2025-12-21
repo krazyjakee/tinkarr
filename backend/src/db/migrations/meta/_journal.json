@@ -15,6 +15,13 @@
       "when": 1766319175672,
       "tag": "0001_neat_mockingbird",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1766352000000,
+      "tag": "0002_add_rss_generator_code",
+      "breakpoints": true
     }
   ]
 }

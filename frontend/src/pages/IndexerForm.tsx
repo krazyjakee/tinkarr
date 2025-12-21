@@ -27,9 +27,9 @@ export const IndexerForm = () => {
   const [mappingType, setMappingType] = useState<'json' | 'code'>('json');
   const [searchParamsText, setSearchParamsText] = useState('');
   const [rssParamsText, setRssParamsText] = useState('');
+  const [rssUrlGeneratorCode, setRssUrlGeneratorCode] = useState('');
+  const [rssParamsMode, setRssParamsMode] = useState<'static' | 'code'>('static');
   const [error, setError] = useState('');
-  const [autoConfigureLoading, setAutoConfigureLoading] = useState(false);
-  const [autoConfigureMessage, setAutoConfigureMessage] = useState('');
 
   const { data: indexer } = useQuery({
     queryKey: ['indexer', id],
@@ -57,6 +57,8 @@ export const IndexerForm = () => {
         rssUrl: indexer.rssUrl,
         rssType: indexer.rssType,
         rssParams: indexer.rssParams,
+        rssUrlGeneratorCode: indexer.rssUrlGeneratorCode,
+        rssMethod: indexer.rssMethod || 'GET',
         resultSelector: indexer.resultSelector,
         resultMapping: indexer.resultMapping,
         resultMappingType: indexer.resultMappingType,
@@ -94,6 +96,14 @@ export const IndexerForm = () => {
           ? JSON.parse(indexer.rssParams)
           : indexer.rssParams;
         setRssParamsText(JSON.stringify(params, null, 2));
+      }
+
+      // Set RSS params mode
+      if (indexer.rssUrlGeneratorCode) {
+        setRssParamsMode('code');
+        setRssUrlGeneratorCode(indexer.rssUrlGeneratorCode);
+      } else {
+        setRssParamsMode('static');
       }
     }
   }, [indexer]);
@@ -156,12 +166,20 @@ export const IndexerForm = () => {
         }
       }
 
-      if (rssParamsText.trim()) {
-        try {
-          data.rssParams = JSON.parse(rssParamsText);
-        } catch (e) {
-          throw new Error('Invalid JSON in RSS Parameters');
+      // Handle RSS params based on mode
+      if (rssParamsMode === 'static') {
+        if (rssParamsText.trim()) {
+          try {
+            data.rssParams = JSON.parse(rssParamsText);
+          } catch (e) {
+            throw new Error('Invalid JSON in RSS Parameters');
+          }
         }
+        data.rssUrlGeneratorCode = undefined;
+      } else {
+        // Code mode
+        data.rssUrlGeneratorCode = rssUrlGeneratorCode;
+        data.rssParams = undefined;
       }
 
       if (isEdit) {
@@ -185,70 +203,25 @@ export const IndexerForm = () => {
     }));
   };
 
-  const handleAutoPopulate = async () => {
-    if (!formData.url) {
-      setAutoConfigureMessage('Please enter a URL first');
-      return;
-    }
-
-    setAutoConfigureLoading(true);
-    setAutoConfigureMessage('');
-    setError('');
-
-    try {
-      // Use Flaresolverr if the checkbox is checked
-      const result = await apiClient.autoConfigureFromUrl(
-        formData.url,
-        formData.requiresFlaresolverr || false
-      );
-
-      if (result.success && result.config) {
-        // Update form data with detected configuration
-        setFormData((prev) => ({
-          ...prev,
-          searchUrl: result.config?.searchUrl || prev.searchUrl,
-          searchMethod: (result.config?.searchMethod as 'GET' | 'POST') || prev.searchMethod,
-          searchQueryParam: result.config?.searchQueryParam || prev.searchQueryParam,
-          rssUrl: result.config?.rssUrl || prev.rssUrl,
-        }));
-
-        // Update search params if any were detected
-        if (result.config?.searchParams && Object.keys(result.config.searchParams).length > 0) {
-          setSearchParamsText(JSON.stringify(result.config.searchParams, null, 2));
-        }
-
-        setAutoConfigureMessage(
-          result.message || 'Configuration populated successfully!'
-        );
-      } else {
-        setError(result.error || 'Failed to auto-configure');
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to auto-configure indexer');
-    } finally {
-      setAutoConfigureLoading(false);
-    }
-  };
-
   return (
     <Layout>
       <div className="px-4 py-6 sm:px-0">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
           {isEdit ? 'Edit Indexer' : 'Add Indexer'}
         </h1>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="text-sm text-red-800">{error}</div>
+            <div className="rounded-md bg-red-50 dark:bg-red-900 p-4">
+              <div className="text-sm text-red-800 dark:text-red-200">{error}</div>
             </div>
           )}
 
-          <div className="bg-white shadow rounded-lg p-6 space-y-6">
-            <h2 className="text-lg font-medium text-gray-900">Basic Information</h2>
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-6">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white">Basic Information</h2>
 
             <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Title *
               </label>
               <input
@@ -258,12 +231,12 @@ export const IndexerForm = () => {
                 required
                 value={formData.title}
                 onChange={handleInputChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
 
             <div>
-              <label htmlFor="url" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="url" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 URL *
               </label>
               <input
@@ -273,7 +246,7 @@ export const IndexerForm = () => {
                 required
                 value={formData.url}
                 onChange={handleInputChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
 
@@ -286,7 +259,7 @@ export const IndexerForm = () => {
                 onChange={handleInputChange}
                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
               />
-              <label htmlFor="enabled" className="ml-2 block text-sm text-gray-900">
+              <label htmlFor="enabled" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                 Enabled
               </label>
             </div>
@@ -300,91 +273,17 @@ export const IndexerForm = () => {
                 onChange={handleInputChange}
                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
               />
-              <label htmlFor="requiresFlaresolverr" className="ml-2 block text-sm text-gray-900">
+              <label htmlFor="requiresFlaresolverr" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                 Requires Flaresolverr
               </label>
             </div>
           </div>
 
-          <div className="bg-white shadow rounded-lg p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium text-gray-900">Search Configuration</h2>
-              <button
-                type="button"
-                onClick={handleAutoPopulate}
-                disabled={!formData.url || autoConfigureLoading}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {autoConfigureLoading ? (
-                  <>
-                    <svg
-                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Auto-configuring...
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      className="-ml-1 mr-2 h-4 w-4"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    Auto-populate from URL
-                  </>
-                )}
-              </button>
-            </div>
-
-            {autoConfigureMessage && (
-              <div className="rounded-md bg-green-50 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg
-                      className="h-5 w-5 text-green-400"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm text-green-800">{autoConfigureMessage}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-6">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white">Search Configuration</h2>
 
             <div>
-              <label htmlFor="searchType" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="searchType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Search Type
               </label>
               <select
@@ -392,7 +291,7 @@ export const IndexerForm = () => {
                 id="searchType"
                 value={formData.searchType}
                 onChange={handleInputChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               >
                 <option value="html_form">HTML Form</option>
                 <option value="rest_api">REST API</option>
@@ -401,7 +300,7 @@ export const IndexerForm = () => {
             </div>
 
             <div>
-              <label htmlFor="searchUrl" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="searchUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Search URL
               </label>
               <input
@@ -410,12 +309,12 @@ export const IndexerForm = () => {
                 id="searchUrl"
                 value={formData.searchUrl || ''}
                 onChange={handleInputChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
 
             <div>
-              <label htmlFor="searchMethod" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="searchMethod" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Search Method
               </label>
               <select
@@ -423,7 +322,7 @@ export const IndexerForm = () => {
                 id="searchMethod"
                 value={formData.searchMethod}
                 onChange={handleInputChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               >
                 <option value="GET">GET</option>
                 <option value="POST">POST</option>
@@ -431,7 +330,7 @@ export const IndexerForm = () => {
             </div>
 
             <div>
-              <label htmlFor="searchQueryParam" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="searchQueryParam" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Search Query Parameter
               </label>
               <input
@@ -440,15 +339,15 @@ export const IndexerForm = () => {
                 id="searchQueryParam"
                 value={formData.searchQueryParam || ''}
                 onChange={handleInputChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Parameter name for the search query (e.g., "q")
               </p>
             </div>
 
             <div>
-              <label htmlFor="searchParams" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="searchParams" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Additional Search Parameters (JSON)
               </label>
               <textarea
@@ -458,21 +357,21 @@ export const IndexerForm = () => {
                 value={searchParamsText}
                 onChange={(e) => setSearchParamsText(e.target.value)}
                 placeholder='{"category": "all", "sort": "date"}'
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
+                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
               />
             </div>
           </div>
 
-          <div className="bg-white shadow rounded-lg p-6 space-y-6">
-            <h2 className="text-lg font-medium text-gray-900">RSS Configuration</h2>
-            <p className="text-sm text-gray-500">
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-6">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white">RSS Configuration</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               Configure this section to enable RSS feeds and recent releases support.
               This is used when no search query is provided.
             </p>
 
             <div>
-              <label htmlFor="rssUrl" className="block text-sm font-medium text-gray-700">
-                RSS URL
+              <label htmlFor="rssUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                RSS Base URL
               </label>
               <input
                 type="url"
@@ -480,31 +379,119 @@ export const IndexerForm = () => {
                 id="rssUrl"
                 value={formData.rssUrl || ''}
                 onChange={handleInputChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Base URL for RSS feed (parameters will be added below)
+              </p>
             </div>
 
             <div>
-              <label htmlFor="rssParams" className="block text-sm font-medium text-gray-700">
-                RSS Parameters (JSON)
+              <label htmlFor="rssMethod" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                RSS Method
               </label>
-              <textarea
-                name="rssParams"
-                id="rssParams"
-                rows={3}
-                value={rssParamsText}
-                onChange={(e) => setRssParamsText(e.target.value)}
-                placeholder='{"cat": "1,2,3"}'
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
-              />
+              <select
+                name="rssMethod"
+                id="rssMethod"
+                value={formData.rssMethod || 'GET'}
+                onChange={handleInputChange}
+                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+              </select>
             </div>
+
+            {/* Tab Headers */}
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8" aria-label="RSS Params Mode">
+                <button
+                  type="button"
+                  onClick={() => setRssParamsMode('static')}
+                  className={`${
+                    rssParamsMode === 'static'
+                      ? 'border-indigo-500 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                >
+                  Static Parameters
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRssParamsMode('code')}
+                  className={`${
+                    rssParamsMode === 'code'
+                      ? 'border-indigo-500 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                >
+                  Code-Based Generator
+                </button>
+              </nav>
+            </div>
+
+            {/* Tab Content */}
+            {rssParamsMode === 'static' ? (
+              <div>
+                <label htmlFor="rssParams" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  RSS Parameters (JSON)
+                </label>
+                <textarea
+                  name="rssParams"
+                  id="rssParams"
+                  rows={3}
+                  value={rssParamsText}
+                  onChange={(e) => setRssParamsText(e.target.value)}
+                  placeholder='{"cat": "1", "sort": "date"}'
+                  className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
+                />
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Static URL parameters as JSON
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  RSS URL Generator Code
+                </label>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                  Write JavaScript code that returns an object with URL parameters. Available variables:
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded mx-1">query</code>,
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded mx-1">season</code>,
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded mx-1">episode</code>,
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded mx-1">imdbId</code>,
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded mx-1">tvdbId</code>,
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded mx-1">categories</code>,
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded mx-1">baseUrl</code>
+                </p>
+                <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden">
+                  <Editor
+                    height="200px"
+                    defaultLanguage="javascript"
+                    value={rssUrlGeneratorCode}
+                    onChange={(value) => setRssUrlGeneratorCode(value || '')}
+                    theme="vs-light"
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 13,
+                      lineNumbers: 'on',
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                    }}
+                  />
+                </div>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  Example: <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">return &#123; cat: categories.split(',').includes('5000') ? '2' : '1', sort: 'date' &#125;;</code>
+                </p>
+              </div>
+            )}
           </div>
 
-          <div className="bg-white shadow rounded-lg p-6 space-y-6">
-            <h2 className="text-lg font-medium text-gray-900">Result Parsing</h2>
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-6">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white">Result Parsing</h2>
 
             <div>
-              <label htmlFor="resultSelector" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="resultSelector" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Result Selector
               </label>
               <input
@@ -514,9 +501,9 @@ export const IndexerForm = () => {
                 value={formData.resultSelector || ''}
                 onChange={handleInputChange}
                 placeholder=".result-row"
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
+                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
               />
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 CSS selector for result items
               </p>
             </div>
@@ -552,7 +539,7 @@ export const IndexerForm = () => {
             {/* JSON Tab Content */}
             {mappingType === 'json' && (
               <div>
-                <label htmlFor="resultMapping" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="resultMapping" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Result Mapping (JSON)
                 </label>
                 <textarea
@@ -583,9 +570,9 @@ export const IndexerForm = () => {
   "minimumSeedTime": ".seedtime",
   "grabs": ".grabs"
 }`}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
+                  className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
                 />
-                <div className="mt-2 text-sm text-gray-600">
+                <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                   <p className="font-medium">Map result fields to CSS selectors. Use @ for attributes (e.g., "a@href")</p>
                   <details className="mt-2">
                     <summary className="cursor-pointer font-medium text-indigo-600 hover:text-indigo-800">
@@ -594,43 +581,43 @@ export const IndexerForm = () => {
                     <div className="mt-2 ml-4 space-y-1 text-xs">
                       <p><strong>Required:</strong></p>
                       <ul className="list-disc list-inside ml-2 space-y-0.5">
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">title</code> - Torrent title</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">link</code> - Download link or torrent file URL</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">title</code> - Torrent title</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">link</code> - Download link or torrent file URL</li>
                       </ul>
                       <p className="mt-2"><strong>Common:</strong></p>
                       <ul className="list-disc list-inside ml-2 space-y-0.5">
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">magnetUrl</code> - Magnet link</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">size</code> - File size (e.g., "1.5 GB")</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">seeders</code> - Number of seeders</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">leechers</code> - Number of leechers</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">category</code> - Content category</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">pubDate</code> - Publication date</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">magnetUrl</code> - Magnet link</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">size</code> - File size (e.g., "1.5 GB")</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">seeders</code> - Number of seeders</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">leechers</code> - Number of leechers</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">category</code> - Content category</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">pubDate</code> - Publication date</li>
                       </ul>
                       <p className="mt-2"><strong>Optional:</strong></p>
                       <ul className="list-disc list-inside ml-2 space-y-0.5">
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">description</code> - Torrent description</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">comments</code> - Comments page URL</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">grabs</code> - Number of downloads</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">infoHash</code> - Torrent info hash</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">description</code> - Torrent description</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">comments</code> - Comments page URL</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">grabs</code> - Number of downloads</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">infoHash</code> - Torrent info hash</li>
                       </ul>
                       <p className="mt-2"><strong>Media IDs:</strong></p>
                       <ul className="list-disc list-inside ml-2 space-y-0.5">
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">imdb</code> / <code className="bg-gray-100 px-1 py-0.5 rounded">imdbId</code> - IMDB ID</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">tvdbId</code> - TVDB ID</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">tmdbId</code> - TMDB ID</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">rageId</code> - TVRage ID</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">tvMazeId</code> - TVMaze ID</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">imdb</code> / <code className="bg-gray-100 px-1 py-0.5 rounded">imdbId</code> - IMDB ID</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">tvdbId</code> - TVDB ID</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">tmdbId</code> - TMDB ID</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">rageId</code> - TVRage ID</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">tvMazeId</code> - TVMaze ID</li>
                       </ul>
                       <p className="mt-2"><strong>Media URLs:</strong></p>
                       <ul className="list-disc list-inside ml-2 space-y-0.5">
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">coverUrl</code> - Poster/cover image URL</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">bannerUrl</code> - Banner image URL</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">coverUrl</code> - Poster/cover image URL</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">bannerUrl</code> - Banner image URL</li>
                       </ul>
                       <p className="mt-2"><strong>Tracker Requirements:</strong></p>
                       <ul className="list-disc list-inside ml-2 space-y-0.5">
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">type</code> - Content type (movie, series, music, book)</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">minimumRatio</code> - Required ratio (e.g., "1.0")</li>
-                        <li><code className="bg-gray-100 px-1 py-0.5 rounded">minimumSeedTime</code> - Min seed time in seconds (e.g., "172800" for 48 hours)</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">type</code> - Content type (movie, series, music, book)</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">minimumRatio</code> - Required ratio (e.g., "1.0")</li>
+                        <li><code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">minimumSeedTime</code> - Min seed time in seconds (e.g., "172800" for 48 hours)</li>
                       </ul>
                     </div>
                   </details>
@@ -641,10 +628,10 @@ export const IndexerForm = () => {
             {/* Code Tab Content */}
             {mappingType === 'code' && (
               <div>
-                <label htmlFor="resultMappingCode" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="resultMappingCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Result Mapping (JavaScript)
                 </label>
-                <div className="border border-gray-300 rounded-md overflow-hidden">
+                <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden">
                   <Editor
                     height="400px"
                     language="javascript"
@@ -660,34 +647,34 @@ export const IndexerForm = () => {
                     }}
                   />
                 </div>
-                <div className="mt-2 text-sm text-gray-600 space-y-2">
+                <div className="mt-2 text-sm text-gray-600 dark:text-gray-400 space-y-2">
                   <p className="font-medium">Your code receives:</p>
                   <ul className="list-disc list-inside space-y-1 ml-2">
-                    <li><code className="text-xs bg-gray-100 px-1 py-0.5 rounded">items[]</code> - Array of elements with helpers (find, text, html, attrs)</li>
-                    <li><code className="text-xs bg-gray-100 px-1 py-0.5 rounded">baseUrl</code> - Page URL for resolving relative links</li>
+                    <li><code className="text-xs bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">items[]</code> - Array of elements with helpers (find, text, html, attrs)</li>
+                    <li><code className="text-xs bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">baseUrl</code> - Page URL for resolving relative links</li>
                   </ul>
                   <p className="font-medium mt-2">Example:</p>
-                  <pre className="text-xs bg-gray-100 p-2 rounded mt-1 overflow-x-auto">
+                  <pre className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 p-2 rounded mt-1 overflow-x-auto">
 {`return items.map(item => ({
-  title: item.find('.title')?.text || '',
-  link: item.find('a')?.attr('href') || '',
-  magnetUrl: item.find('.magnet')?.attr('href') || '',
-  size: item.find('.size')?.text || '',
-  seeders: item.find('.seeders')?.text || '0',
-  leechers: item.find('.leechers')?.text || '0',
-  category: item.find('.category')?.text || '',
-  pubDate: item.find('.date')?.text || '',
-  description: item.find('.description')?.text || '',
-  comments: item.find('.comments')?.attr('href') || '',
-  imdb: item.find('.imdb')?.attr('data-imdb') || '',
-  tvdbId: item.find('.tvdb')?.attr('data-tvdb') || '',
-  type: item.find('.type')?.text || 'series',
-  infoHash: item.find('.hash')?.attr('data-hash') || '',
-  coverUrl: item.find('.cover')?.attr('src') || '',
-  bannerUrl: item.find('.banner')?.attr('src') || '',
-  minimumRatio: item.find('.ratio')?.text || '1.0',
-  minimumSeedTime: item.find('.seedtime')?.text || '172800',
-  grabs: item.find('.grabs')?.text || '0'
+  title: item.find('.title')?.text || '', // "The Matrix"
+  link: item.find('a')?.attr('href') || '', // "https://example.com/download/the.matrix.torrent"
+  magnetUrl: item.find('.magnet')?.attr('href') || '', // "magnet:?xt=urn:btih:..."
+  size: item.find('.size')?.text || '', // "1.4 GB"
+  seeders: item.find('.seeders')?.text || '0', // "123"
+  leechers: item.find('.leechers')?.text || '0', // "45"
+  category: item.find('.category')?.text || '', // "Movies/HD"
+  pubDate: item.find('.date')?.text || '', // "2023-10-27 14:30:00"
+  description: item.find('.description')?.text || '', // "A computer hacker learns from mysterious rebels about the true nature of his reality and his role in the war against its controllers."
+  comments: item.find('.comments')?.attr('href') || '', // "https://example.com/comments/the.matrix"
+  imdb: item.find('.imdb')?.attr('data-imdb') || '', // "tt0133093"
+  tvdbId: item.find('.tvdb')?.attr('data-tvdb') || '', // "79340"
+  type: item.find('.type')?.text || 'series', // "movie"
+  infoHash: item.find('.hash')?.attr('data-hash') || '', // "d41d8cd98f00b204e9800998ecf8427e"
+  coverUrl: item.find('.cover')?.attr('src') || '', // "https://example.com/covers/the.matrix.jpg"
+  bannerUrl: item.find('.banner')?.attr('src') || '', // "https://example.com/banners/the.matrix.jpg"
+  minimumRatio: item.find('.ratio')?.text || '1.0', // "1.0"
+  minimumSeedTime: item.find('.seedtime')?.text || '172800', // "172800"
+  grabs: item.find('.grabs')?.text || '0' // "500"
 }));`}
                   </pre>
                 </div>
@@ -699,7 +686,7 @@ export const IndexerForm = () => {
             <button
               type="button"
               onClick={() => navigate('/indexers')}
-              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
             >
               Cancel
             </button>

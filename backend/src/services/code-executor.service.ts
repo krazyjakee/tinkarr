@@ -16,7 +16,61 @@ export interface CodeExecutorContext {
   baseUrl: string;
 }
 
+export interface RssGeneratorContext {
+  query?: string;
+  season?: number;
+  episode?: number;
+  imdbId?: string;
+  tvdbId?: string;
+  categories?: string[];
+  baseUrl: string;
+}
+
 export class CodeExecutorService {
+  /**
+   * Set up a timeout for VM execution
+   */
+  private setupTimeout(vm: QuickJSContext, timeout: number): {
+    handle: NodeJS.Timeout;
+    isTimedOut: () => boolean;
+    cleanup: () => void;
+  } {
+    let timedOut = false;
+
+    const handle = setTimeout(() => {
+      timedOut = true;
+      vm.dispose();
+    }, timeout);
+
+    return {
+      handle,
+      isTimedOut: () => timedOut,
+      cleanup: () => {
+        if (handle) {
+          clearTimeout(handle);
+        }
+      }
+    };
+  }
+
+  /**
+   * Parse and improve error messages from QuickJS
+   */
+  private parseErrorMessage(error: any): string {
+    let errorMessage = error.message || 'Unknown error';
+
+    // Parse QuickJS error messages for better user feedback
+    if (errorMessage.includes('SyntaxError')) {
+      errorMessage = `Syntax error: ${errorMessage}`;
+    } else if (errorMessage.includes('ReferenceError')) {
+      errorMessage = `Reference error: ${errorMessage}`;
+    } else if (errorMessage.includes('TypeError')) {
+      errorMessage = `Type error: ${errorMessage}`;
+    }
+
+    return errorMessage;
+  }
+
   /**
    * Execute user-provided JavaScript code in a sandboxed environment
    */
@@ -29,15 +83,9 @@ export class CodeExecutorService {
     const QuickJS = await getQuickJS();
     const vm = QuickJS.newContext();
 
-    let timeoutHandle: NodeJS.Timeout | null = null;
-    let timedOut = false;
+    const timeoutManager = this.setupTimeout(vm, timeout);
 
     try {
-      // Set up timeout
-      timeoutHandle = setTimeout(() => {
-        timedOut = true;
-        vm.dispose();
-      }, timeout);
 
       // Create items array with find functions
       const itemsArray = vm.newArray();
@@ -108,7 +156,7 @@ export class CodeExecutorService {
       // Execute code
       const resultHandle = vm.unwrapResult(vm.evalCode(wrappedCode));
 
-      if (timedOut) {
+      if (timeoutManager.isTimedOut()) {
         throw new Error('Code execution timeout (5 seconds)');
       }
 
@@ -122,27 +170,111 @@ export class CodeExecutorService {
 
       return result;
     } catch (error: any) {
-      if (timedOut) {
+      if (timeoutManager.isTimedOut()) {
         throw new Error('Code execution timeout (5 seconds)');
       }
 
       // Improve error messages
-      let errorMessage = error.message || 'Unknown error';
-
-      // Parse QuickJS error messages for better user feedback
-      if (errorMessage.includes('SyntaxError')) {
-        errorMessage = `Syntax error: ${errorMessage}`;
-      } else if (errorMessage.includes('ReferenceError')) {
-        errorMessage = `Reference error: ${errorMessage}`;
-      } else if (errorMessage.includes('TypeError')) {
-        errorMessage = `Type error: ${errorMessage}`;
-      }
-
+      const errorMessage = this.parseErrorMessage(error);
       throw new Error(`Code execution error: ${errorMessage}`);
     } finally {
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
+      timeoutManager.cleanup();
+      try {
+        vm.dispose();
+      } catch {
+        // VM already disposed by timeout
       }
+    }
+  }
+
+  /**
+   * Execute RSS URL parameter generator code in a sandboxed environment
+   * Returns an object with key-value pairs for RSS URL parameters
+   */
+  async executeRssParamsGenerator(
+    code: string,
+    context: RssGeneratorContext,
+    options: CodeExecutorOptions = {}
+  ): Promise<Record<string, string>> {
+    const timeout = options.timeout || 5000;
+    const QuickJS = await getQuickJS();
+    const vm = QuickJS.newContext();
+
+    const timeoutManager = this.setupTimeout(vm, timeout);
+
+    try {
+
+      // Set context variables in global scope
+      vm.setProp(vm.global, 'baseUrl', vm.newString(context.baseUrl));
+
+      if (context.query !== undefined) {
+        vm.setProp(vm.global, 'query', vm.newString(context.query));
+      }
+
+      if (context.season !== undefined) {
+        vm.setProp(vm.global, 'season', vm.newNumber(context.season));
+      }
+
+      if (context.episode !== undefined) {
+        vm.setProp(vm.global, 'episode', vm.newNumber(context.episode));
+      }
+
+      if (context.imdbId !== undefined) {
+        vm.setProp(vm.global, 'imdbId', vm.newString(context.imdbId));
+      }
+
+      if (context.tvdbId !== undefined) {
+        vm.setProp(vm.global, 'tvdbId', vm.newString(context.tvdbId));
+      }
+
+      if (context.categories !== undefined) {
+        const categoriesArray = vm.newArray();
+        context.categories.forEach((cat, index) => {
+          vm.setProp(categoriesArray, index, vm.newString(cat));
+        });
+        vm.setProp(vm.global, 'categories', categoriesArray);
+        categoriesArray.dispose();
+      }
+
+      // Wrap user code in a function that returns the result
+      const wrappedCode = `
+        (function() {
+          ${code}
+        })()
+      `;
+
+      // Execute code
+      const resultHandle = vm.unwrapResult(vm.evalCode(wrappedCode));
+
+      if (timeoutManager.isTimedOut()) {
+        throw new Error('Code execution timeout (5 seconds)');
+      }
+
+      const result = vm.dump(resultHandle);
+      resultHandle.dispose();
+
+      // Validate result is an object
+      if (typeof result !== 'object' || result === null || Array.isArray(result)) {
+        throw new Error('Code must return an object with key-value pairs for RSS parameters');
+      }
+
+      // Convert all values to strings
+      const params: Record<string, string> = {};
+      for (const [key, value] of Object.entries(result)) {
+        params[key] = String(value);
+      }
+
+      return params;
+    } catch (error: any) {
+      if (timeoutManager.isTimedOut()) {
+        throw new Error('Code execution timeout (5 seconds)');
+      }
+
+      // Improve error messages
+      const errorMessage = this.parseErrorMessage(error);
+      throw new Error(`RSS params generator error: ${errorMessage}`);
+    } finally {
+      timeoutManager.cleanup();
       try {
         vm.dispose();
       } catch {
