@@ -31,6 +31,9 @@ RUN npm install
 # Copy backend source
 COPY backend .
 
+# Validate migrations before building (prevents production failures)
+RUN npm run validate:migrations
+
 # Build TypeScript
 RUN npm run build
 
