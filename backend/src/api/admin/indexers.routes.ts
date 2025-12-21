@@ -130,6 +130,8 @@ router.post('/:id/test', async (req: Request, res: Response) => {
       searchQueryParam: indexer.searchQueryParam,
       resultSelector: indexer.resultSelector,
       resultMapping: indexer.resultMapping,
+      resultMappingType: indexer.resultMappingType,
+      resultMappingCode: indexer.resultMappingCode,
     };
 
     // Test the indexer

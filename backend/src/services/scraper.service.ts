@@ -30,6 +30,8 @@ export interface IndexerConfig {
   searchQueryParam: string | null;
   resultSelector: string | null;
   resultMapping: any;
+  resultMappingType?: string | null;
+  resultMappingCode?: string | null;
 }
 
 export interface ScraperOptions {
@@ -155,7 +157,7 @@ export class ScraperService {
       }
 
       // Parse the results
-      const parsedResults = this.parseResults(html, indexer, actualUrl);
+      const parsedResults = await this.parseResults(html, indexer, actualUrl);
 
       const result: ScraperResult = {
         success: true,
@@ -278,30 +280,55 @@ export class ScraperService {
   /**
    * Parse HTML results using indexer configuration
    */
-  private parseResults(html: string, indexer: IndexerConfig, baseUrl: string): ParsedResult[] {
-    if (!indexer.resultSelector || !indexer.resultMapping) {
+  private async parseResults(html: string, indexer: IndexerConfig, baseUrl: string): Promise<ParsedResult[]> {
+    if (!indexer.resultSelector) {
       return [];
     }
 
     try {
-      // Parse result mapping if it's a string
-      const resultMapping = typeof indexer.resultMapping === 'string'
-        ? JSON.parse(indexer.resultMapping)
-        : indexer.resultMapping;
+      // Determine mapping type (default to 'json' for backward compatibility)
+      const mappingType = indexer.resultMappingType || 'json';
 
-      // Extract data using parser service
-      const results = this.parserService.extractData(
-        html,
-        indexer.resultSelector,
-        resultMapping,
-        {
-          baseUrl,
-          normalizeWhitespace: true,
-          trim: true,
+      if (mappingType === 'code') {
+        // Use code-based extraction
+        if (!indexer.resultMappingCode) {
+          console.warn(`Indexer ${indexer.title} has code mapping type but no code provided`);
+          return [];
         }
-      );
 
-      return results;
+        return await this.parserService.extractDataWithCode(
+          html,
+          indexer.resultSelector,
+          indexer.resultMappingCode,
+          {
+            baseUrl,
+            normalizeWhitespace: true,
+            trim: true,
+          }
+        );
+      } else {
+        // Use JSON-based extraction (existing logic)
+        if (!indexer.resultMapping) {
+          return [];
+        }
+
+        // Parse result mapping if it's a string
+        const resultMapping = typeof indexer.resultMapping === 'string'
+          ? JSON.parse(indexer.resultMapping)
+          : indexer.resultMapping;
+
+        // Extract data using parser service
+        return this.parserService.extractData(
+          html,
+          indexer.resultSelector,
+          resultMapping,
+          {
+            baseUrl,
+            normalizeWhitespace: true,
+            trim: true,
+          }
+        );
+      }
     } catch (error: any) {
       console.error(`Failed to parse results for indexer ${indexer.title}:`, error);
       return [];

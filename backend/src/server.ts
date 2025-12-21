@@ -83,12 +83,20 @@ if (NODE_ENV === 'production') {
   const VITE_PORT = process.env.VITE_PORT || 5173;
 
   // Proxy all non-API requests to Vite dev server
-  // API routes are already handled above, so they won't reach this middleware
-  app.use('/', createProxyMiddleware({
-    target: `http://0.0.0.0:${VITE_PORT}`,
+  // Skip /api and /health routes - let them 404 naturally
+  const viteProxy = createProxyMiddleware({
+    target: `http://localhost:${VITE_PORT}`,
     changeOrigin: true,
     ws: true, // Enable websocket proxy for HMR
-  }));
+  });
+
+  app.use((req, res, next) => {
+    // Don't proxy API routes or health check - let them fall through to error handlers
+    if (req.path.startsWith('/api') || req.path === '/health') {
+      return next();
+    }
+    return viteProxy(req, res, next);
+  });
 }
 
 // Error handling

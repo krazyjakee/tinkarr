@@ -48,6 +48,8 @@ export const indexers = sqliteTable('indexers', {
   //   category: '.category',
   //   pubDate: '.date'
   // }
+  resultMappingType: text('result_mapping_type', { enum: ['json', 'code'] }).default('json'),
+  resultMappingCode: text('result_mapping_code'),
 
   createdAt: text('created_at')
     .notNull()

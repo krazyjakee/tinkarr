@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { Layout } from '../components/common/Layout';
 import type { CreateIndexerRequest } from '../types';
+import Editor from '@monaco-editor/react';
 
 export const IndexerForm = () => {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +23,8 @@ export const IndexerForm = () => {
   });
 
   const [resultMappingText, setResultMappingText] = useState('');
+  const [resultMappingCode, setResultMappingCode] = useState('');
+  const [mappingType, setMappingType] = useState<'json' | 'code'>('json');
   const [searchParamsText, setSearchParamsText] = useState('');
   const [error, setError] = useState('');
   const [autoConfigureLoading, setAutoConfigureLoading] = useState(false);
@@ -51,7 +54,14 @@ export const IndexerForm = () => {
         rssParams: indexer.rssParams,
         resultSelector: indexer.resultSelector,
         resultMapping: indexer.resultMapping,
+        resultMappingType: indexer.resultMappingType,
+        resultMappingCode: indexer.resultMappingCode,
       });
+
+      // Set mapping type
+      setMappingType(indexer.resultMappingType || 'json');
+
+      // Handle JSON mapping
       if (indexer.resultMapping) {
         // If it's a string, parse it first to format properly
         const mapping = typeof indexer.resultMapping === 'string'
@@ -59,6 +69,12 @@ export const IndexerForm = () => {
           : indexer.resultMapping;
         setResultMappingText(JSON.stringify(mapping, null, 2));
       }
+
+      // Handle code mapping
+      if (indexer.resultMappingCode) {
+        setResultMappingCode(indexer.resultMappingCode);
+      }
+
       if (indexer.searchParams) {
         // If it's a string, parse it first to format properly
         const params = typeof indexer.searchParams === 'string'
@@ -100,8 +116,19 @@ export const IndexerForm = () => {
     try {
       const data: CreateIndexerRequest = { ...formData };
 
-      if (resultMappingText.trim()) {
-        data.resultMapping = JSON.parse(resultMappingText);
+      // Set mapping type
+      data.resultMappingType = mappingType;
+
+      // Handle mapping based on type
+      if (mappingType === 'json') {
+        if (resultMappingText.trim()) {
+          data.resultMapping = JSON.parse(resultMappingText);
+        }
+        data.resultMappingCode = undefined;
+      } else {
+        // Code mapping
+        data.resultMappingCode = resultMappingCode;
+        data.resultMapping = undefined;
       }
 
       if (searchParamsText.trim()) {
@@ -428,17 +455,47 @@ export const IndexerForm = () => {
               </p>
             </div>
 
-            <div>
-              <label htmlFor="resultMapping" className="block text-sm font-medium text-gray-700">
-                Result Mapping (JSON)
-              </label>
-              <textarea
-                name="resultMapping"
-                id="resultMapping"
-                rows={8}
-                value={resultMappingText}
-                onChange={(e) => setResultMappingText(e.target.value)}
-                placeholder={`{
+            {/* Tab Headers */}
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8" aria-label="Mapping Type">
+                <button
+                  type="button"
+                  onClick={() => setMappingType('json')}
+                  className={`${
+                    mappingType === 'json'
+                      ? 'border-indigo-500 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                >
+                  JSON Mapping
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMappingType('code')}
+                  className={`${
+                    mappingType === 'code'
+                      ? 'border-indigo-500 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                >
+                  JavaScript Code
+                </button>
+              </nav>
+            </div>
+
+            {/* JSON Tab Content */}
+            {mappingType === 'json' && (
+              <div>
+                <label htmlFor="resultMapping" className="block text-sm font-medium text-gray-700">
+                  Result Mapping (JSON)
+                </label>
+                <textarea
+                  name="resultMapping"
+                  id="resultMapping"
+                  rows={8}
+                  value={resultMappingText}
+                  onChange={(e) => setResultMappingText(e.target.value)}
+                  placeholder={`{
   "title": ".title",
   "link": "a@href",
   "size": ".size",
@@ -447,12 +504,57 @@ export const IndexerForm = () => {
   "category": ".category",
   "pubDate": ".date"
 }`}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
-              />
-              <p className="mt-1 text-sm text-gray-500">
-                Map result fields to CSS selectors. Use @ for attributes (e.g., "a@href")
-              </p>
-            </div>
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  Map result fields to CSS selectors. Use @ for attributes (e.g., "a@href")
+                </p>
+              </div>
+            )}
+
+            {/* Code Tab Content */}
+            {mappingType === 'code' && (
+              <div>
+                <label htmlFor="resultMappingCode" className="block text-sm font-medium text-gray-700 mb-2">
+                  Result Mapping (JavaScript)
+                </label>
+                <div className="border border-gray-300 rounded-md overflow-hidden">
+                  <Editor
+                    height="400px"
+                    language="javascript"
+                    value={resultMappingCode}
+                    onChange={(value) => setResultMappingCode(value || '')}
+                    theme="vs-dark"
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 14,
+                      lineNumbers: 'on',
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                    }}
+                  />
+                </div>
+                <div className="mt-2 text-sm text-gray-600 space-y-2">
+                  <p className="font-medium">Your code receives:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li><code className="text-xs bg-gray-100 px-1 py-0.5 rounded">items[]</code> - Array of elements with helpers (find, text, html, attrs)</li>
+                    <li><code className="text-xs bg-gray-100 px-1 py-0.5 rounded">baseUrl</code> - Page URL for resolving relative links</li>
+                  </ul>
+                  <p className="font-medium mt-2">Example:</p>
+                  <pre className="text-xs bg-gray-100 p-2 rounded mt-1 overflow-x-auto">
+{`return items.map(item => ({
+  title: item.find('.title')?.text || '',
+  link: item.find('a')?.attr('href') || '',
+  size: item.find('.size')?.text || '',
+  seeders: item.find('.seeders')?.text || '0',
+  leechers: item.find('.leechers')?.text || '0',
+  category: item.find('.category')?.text || '',
+  pubDate: item.find('.date')?.text || ''
+}));`}
+                  </pre>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end space-x-3">

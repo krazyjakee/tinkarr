@@ -12,7 +12,7 @@ export const registerSchema = z.object({
 });
 
 // Indexer validation schemas
-export const createIndexerSchema = z.object({
+const baseIndexerSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   url: z.string().url('Invalid URL'),
   favicon: z.string().nullish(),
@@ -31,9 +31,27 @@ export const createIndexerSchema = z.object({
 
   resultSelector: z.string().nullish(),
   resultMapping: z.record(z.string()).nullish(),
+  resultMappingType: z.enum(['json', 'code']).default('json'),
+  resultMappingCode: z.string().max(10240, 'Code cannot exceed 10KB').nullish(),
 });
 
-export const updateIndexerSchema = createIndexerSchema.partial();
+export const createIndexerSchema = baseIndexerSchema.refine(
+  (data) => {
+    // Ensure either JSON or code is provided based on mapping type
+    if (data.resultMappingType === 'code') {
+      return data.resultMappingCode !== null && data.resultMappingCode !== undefined;
+    } else if (data.resultMappingType === 'json') {
+      return data.resultMapping !== null && data.resultMapping !== undefined;
+    }
+    return true;
+  },
+  {
+    message: 'Must provide either resultMapping (JSON) or resultMappingCode (code) based on resultMappingType',
+    path: ['resultMappingType'],
+  }
+);
+
+export const updateIndexerSchema = baseIndexerSchema.partial();
 
 // Settings validation schemas
 export const updateSettingsSchema = z.record(z.string());

@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { CheerioAPI } from 'cheerio';
+import { CodeExecutorService, ElementContext } from './code-executor.service';
 
 export interface ParsedResult {
   [key: string]: string | null;
@@ -344,6 +345,73 @@ export class ParserService {
    */
   public elementExists(html: string, selector: string): boolean {
     return this.countElements(html, selector) > 0;
+  }
+
+  /**
+   * Extract data using JavaScript code execution
+   */
+  public async extractDataWithCode(
+    html: string,
+    itemSelector: string,
+    code: string,
+    options: ParserOptions = {}
+  ): Promise<ParsedResult[]> {
+    const $ = this.parseHtml(html);
+    const items = $(itemSelector);
+
+    if (items.length === 0) {
+      console.warn(`No items found with selector: ${itemSelector}`);
+      return [];
+    }
+
+    // Prepare element data for code execution
+    const elementData: ElementContext[] = [];
+
+    items.each((_index, element) => {
+      const $el = $(element);
+
+      // Create find helper function
+      const findHelper = (selector: string) => {
+        const found = $el.find(selector);
+        if (found.length === 0) return null;
+
+        return {
+          text: found.text().trim(),
+          attr: (name: string) => {
+            const value = found.attr(name) || null;
+            // Resolve URLs if needed
+            if (value && (name === 'href' || name === 'src') && options.baseUrl) {
+              return this.resolveUrl(value, options.baseUrl);
+            }
+            return value;
+          },
+        };
+      };
+
+      elementData.push({
+        text: $el.text().trim(),
+        html: $el.html() || '',
+        attrs: (element as any).attribs || {},
+        find: findHelper,
+      });
+    });
+
+    // Execute user code
+    const codeExecutor = new CodeExecutorService();
+    try {
+      const results = await codeExecutor.executeUserCode(
+        code,
+        {
+          items: elementData,
+          baseUrl: options.baseUrl || '',
+        }
+      );
+
+      return results;
+    } catch (error: any) {
+      console.error(`Code execution failed: ${error.message}`);
+      throw error;
+    }
   }
 }
 

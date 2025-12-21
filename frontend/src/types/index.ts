@@ -28,6 +28,8 @@ export interface Indexer {
   rssParams?: Record<string, string>;
   resultSelector?: string;
   resultMapping?: Record<string, string>;
+  resultMappingType?: 'json' | 'code';
+  resultMappingCode?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -48,6 +50,8 @@ export interface CreateIndexerRequest {
   rssParams?: Record<string, string>;
   resultSelector?: string;
   resultMapping?: Record<string, string>;
+  resultMappingType?: 'json' | 'code';
+  resultMappingCode?: string;
 }
 
 export interface Setting {
