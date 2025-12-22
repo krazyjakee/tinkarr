@@ -131,11 +131,6 @@ npm run migrate      # Database migrations
 npm run seed         # Seed initial data
 ```
 
-## Documentation
-
-- [**Deployment Guide**](./DEPLOYMENT.md) - Docker and production setup
-- [Phase Documentation](./backend/) - Implementation details for each phase
-
 ## *arr Integration
 
 In Sonarr/Radarr/Prowlarr:
