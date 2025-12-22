@@ -19,8 +19,6 @@ A universal Torznab API adapter that converts any website or API into a Torznab-
 **Frontend:** React, Tailwind CSS, React Query, Vite
 **Architecture:** Unified service on single port (8677) - backend serves API + static frontend
 
-**Status:** Production-ready backend with 63 passing tests (95%+ coverage). Frontend UI pending.
-
 ## Quick Start
 
 ### Docker (Recommended)
@@ -31,8 +29,6 @@ cd tinkarr
 cp .env.docker.example .env  # Edit and set JWT_SECRET
 docker-compose up -d
 ```
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment options.
 
 ### Local Development
 
