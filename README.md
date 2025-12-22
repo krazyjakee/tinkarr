@@ -6,7 +6,6 @@ A universal Torznab API adapter that converts any website or API into a Torznab-
 
 - **Universal Adapter** with CSS selector parsing and attribute extraction
 - **Cloudflare Bypass** via Flaresolverr integration with intelligent fallback
-- **Multiple Search Types**: General, TV, and movie searches
 - **JWT Authentication** with per-user API keys
 - **Response Caching** with configurable TTL and cache management
 - **Health Monitoring** with dead indexer detection
@@ -17,7 +16,6 @@ A universal Torznab API adapter that converts any website or API into a Torznab-
 
 **Backend:** Node.js/TypeScript, Express.js, SQLite + Drizzle ORM, Cheerio, Axios, JWT auth
 **Frontend:** React, Tailwind CSS, React Query, Vite
-**Architecture:** Unified service on single port (8677) - backend serves API + static frontend
 
 ## Quick Start
 
