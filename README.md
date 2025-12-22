@@ -68,27 +68,7 @@ Service runs on `http://localhost:8677` (API + frontend)
 
 ## Configuration Example
 
-### Indexer Configuration
-
-```json
-{
-  "title": "Example Tracker",
-  "url": "https://example.com",
-  "searchUrl": "https://example.com/search",
-  "searchMethod": "GET",
-  "searchQueryParam": "q",
-  "resultSelector": ".result-row",
-  "resultMapping": {
-    "title": ".title",
-    "link": ".download-link@href",
-    "size": ".size",
-    "seeders": ".seeds",
-    "leechers": ".leech",
-    "category": ".category",
-    "pubDate": ".date"
-  }
-}
-```
+See https://github.com/krazyjakee/tinkarr/tree/main/indexers and use the import tool
 
 ### CSS Selector Syntax
 
