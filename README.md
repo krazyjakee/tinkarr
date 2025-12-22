@@ -26,7 +26,7 @@ A universal Torznab API adapter that converts any website or API into a Torznab-
 ### Docker (Recommended)
 
 ```bash
-git clone https://github.com/yourusername/tinkarr.git
+git clone https://github.com/krazyjakee/tinkarr.git
 cd tinkarr
 cp .env.docker.example .env  # Edit and set JWT_SECRET
 docker-compose up -d
@@ -37,7 +37,7 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment options.
 ### Local Development
 
 ```bash
-git clone https://github.com/yourusername/tinkarr.git
+git clone https://github.com/krazyjakee/tinkarr.git
 cd tinkarr
 ./start-local.sh  # Automated setup with hot reload
 ```
