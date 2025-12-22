@@ -143,11 +143,6 @@ In Sonarr/Radarr/Prowlarr:
 2. URL: `http://localhost:8677/api/torznab/{indexerId}`
 3. API Key: From Tinkarr login response
 
-## Roadmap
-
-**Next:** Phase 4 - React-based web UI for indexer management
-**Future:** Multi-user roles, proxy support, Puppeteer integration, advanced parsing (XPath/JSONPath/Regex), webhooks, plugin system
-
 ## Troubleshooting
 
 **Invalid API key:** Verify correct API key from login response
